@@ -1,0 +1,7 @@
+# EAS Build ignore file
+node_modules/
+.expo/
+dist/
+*.log
+.DS_Store
+*.tgz

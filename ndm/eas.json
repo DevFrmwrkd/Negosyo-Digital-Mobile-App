@@ -1,0 +1,49 @@
+{
+  "cli": {
+    "version": ">= 5.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_CONVEX_URL": "https://diligent-ibex-454.convex.cloud",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_dXByaWdodC1jYXJkaW5hbC0xNS5jbGVyay5hY2NvdW50cy5kZXYk"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_CONVEX_URL": "https://diligent-ibex-454.convex.cloud",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_dXByaWdodC1jYXJkaW5hbC0xNS5jbGVyay5hY2NvdW50cy5kZXYk"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "resourceClass": "m1-medium"
+      },
+      "env": {
+        "EXPO_PUBLIC_CONVEX_URL": "https://diligent-ibex-454.convex.cloud",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_dXByaWdodC1jYXJkaW5hbC0xNS5jbGVyay5hY2NvdW50cy5kZXYk"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

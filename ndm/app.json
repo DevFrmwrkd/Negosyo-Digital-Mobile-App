@@ -1,0 +1,84 @@
+{
+  "expo": {
+    "name": "Negosyo Digital",
+    "slug": "negosyo-digital",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "negosyodigital",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.negosyodigital.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "The app needs camera access to record video interviews.",
+        "NSMicrophoneUsageDescription": "The app needs microphone access to record audio.",
+        "NSPhotoLibraryUsageDescription": "The app needs photo library access to upload business images."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.negosyodigital.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "The app needs camera access to record video interviews.",
+          "microphonePermission": "The app needs microphone access to record audio in video interviews.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you upload business images.",
+          "cameraPermission": "The app accesses your camera to let you take business photos."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "The app accesses your microphone to record business interviews."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "2adbda2f-fecd-4fdd-91b8-56db76e0c780"
+      }
+    },
+    "owner": "stevenmadali"
+  }
+}
