@@ -16,6 +16,7 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio, Video, ResizeMode } from 'expo-av';
 import { CameraView, CameraType, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -42,6 +43,7 @@ export default function SubmitInterviewScreen() {
     user ? { clerkId: user.id } : 'skip'
   );
 
+  const insets = useSafeAreaInsets();
   const generateR2UploadUrl = useMutation(api.r2.generateUploadUrl);
   const updateSubmission = useMutation(api.submissions.update);
 
@@ -1133,7 +1135,7 @@ export default function SubmitInterviewScreen() {
       </ScrollView>
 
       {/* Bottom Button */}
-      <View className="px-4 py-4 bg-white border-t border-zinc-100">
+      <View className="px-4 pt-4 bg-white border-t border-zinc-100" style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
         {/* Upload Progress Bar */}
         {loading && uploadProgress > 0 && (
           <View className="mb-3">

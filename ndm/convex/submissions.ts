@@ -73,6 +73,7 @@ export const update = mutation({
     businessType: v.optional(v.string()),
     ownerName: v.optional(v.string()),
     ownerPhone: v.optional(v.string()),
+    ownerEmail: v.optional(v.string()),
     address: v.optional(v.string()),
     city: v.optional(v.string()),
     photos: v.optional(v.array(v.string())),

@@ -37,6 +37,8 @@ export default defineSchema({
     status: v.string(), // draft, pending, approved, rejected, website_generated, deployed, paid, in_review
     creatorPayout: v.optional(v.number()),
     amount: v.optional(v.number()),
+    airtableRecordId: v.optional(v.string()),
+    airtableSyncStatus: v.optional(v.string()),
   }).index("by_creator_id", ["creatorId"])
     .index("by_status", ["status"]),
 
@@ -92,6 +94,9 @@ export default defineSchema({
     // Services section
     servicesHeadline: v.optional(v.string()),
     servicesSubheadline: v.optional(v.string()),
+    servicesDescription: v.optional(v.string()),
+    // Contact section
+    contactCta: v.optional(v.string()),
     // Business info
     businessName: v.optional(v.string()),
     tagline: v.optional(v.string()),
@@ -99,6 +104,7 @@ export default defineSchema({
     // Services and other content
     services: v.optional(v.any()),
     images: v.optional(v.any()),
+    enhancedImages: v.optional(v.any()),
     contact: v.optional(v.any()),
     contactInfo: v.optional(v.any()),
     customizations: v.optional(v.any()),
@@ -106,5 +112,6 @@ export default defineSchema({
     visibility: v.optional(v.any()),
     socialLinks: v.optional(v.any()),
     updatedAt: v.optional(v.number()),
+    airtableSyncedAt: v.optional(v.number()),
   }).index("by_submission_id", ["submissionId"]),
 });
