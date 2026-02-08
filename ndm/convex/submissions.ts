@@ -76,6 +76,7 @@ export const update = mutation({
     address: v.optional(v.string()),
     city: v.optional(v.string()),
     photos: v.optional(v.array(v.string())),
+    hasProducts: v.optional(v.boolean()), // Whether this business sells products (affects expected photo count)
     videoStorageId: v.optional(v.string()),
     audioStorageId: v.optional(v.string()),
     creatorPayout: v.optional(v.number()),
@@ -125,6 +126,13 @@ export const submit = mutation({
     await ctx.db.patch(args.id, {
       status: "pending",
       amount: 1000, // Fixed amount for all submissions
+      // Initialize Airtable sync status
+      airtableSyncStatus: "pending_push",
+    });
+
+    // Schedule push to Airtable for AI image enhancement
+    await ctx.scheduler.runAfter(0, internal.airtable.pushToAirtableInternal, {
+      submissionId: args.id,
     });
   },
 });
