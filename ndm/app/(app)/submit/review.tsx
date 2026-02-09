@@ -360,7 +360,7 @@ export default function SubmitReviewScreen() {
                   ref={videoRef}
                   source={{ uri: videoUrl }}
                   style={{ width: '100%', height: '100%' }}
-                  resizeMode={ResizeMode.COVER}
+                  resizeMode={ResizeMode.CONTAIN}
                   shouldPlay={false}
                   isMuted={true}
                   isLooping={false}
