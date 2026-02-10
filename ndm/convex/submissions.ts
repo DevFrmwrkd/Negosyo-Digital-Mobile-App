@@ -124,7 +124,7 @@ export const submit = mutation({
     }
 
     await ctx.db.patch(args.id, {
-      status: "pending",
+      status: "submitted",
       amount: 1000, // Fixed amount for all submissions
     });
   },
