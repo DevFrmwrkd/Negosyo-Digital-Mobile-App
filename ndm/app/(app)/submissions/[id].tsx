@@ -11,9 +11,10 @@ import {
 } from 'react-native';
 import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { useRouter, useLocalSearchParams, Link } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Id } from '../../../convex/_generated/dataModel';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SubmissionDetailScreen() {
   const router = useRouter();
@@ -275,20 +276,20 @@ export default function SubmissionDetailScreen() {
       {/* Continue Submission Button (for drafts) */}
       {isDraft && (
         <View className="px-4 py-4 border-t border-zinc-100">
-          <Link
-            href={
-              !submission.photos || submission.photos.length === 0
+          <TouchableOpacity
+            className="bg-emerald-500 rounded-xl py-4 items-center"
+            onPress={async () => {
+              await AsyncStorage.setItem('current_submission_id', submission._id);
+              const route = !submission.photos || submission.photos.length === 0
                 ? '/(app)/submit/photos'
                 : !submission.videoStorageId && !submission.audioStorageId
                 ? '/(app)/submit/interview'
-                : '/(app)/submit/review'
-            }
-            asChild
+                : '/(app)/submit/review';
+              router.push(route as any);
+            }}
           >
-            <TouchableOpacity className="bg-emerald-500 rounded-xl py-4 items-center">
-              <Text className="text-white font-bold text-base">Continue Submission</Text>
-            </TouchableOpacity>
-          </Link>
+            <Text className="text-white font-bold text-base">Continue Submission</Text>
+          </TouchableOpacity>
         </View>
       )}
     </SafeAreaView>
