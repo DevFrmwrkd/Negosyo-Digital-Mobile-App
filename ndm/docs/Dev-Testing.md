@@ -196,16 +196,81 @@ This file lists all features and changes that need to be tested on the **mobile 
 - [ ] `analyticsJobs.aggregateDailyToMonthly` → rolls up yesterday's daily records into monthly (test via Convex dashboard manual trigger)
 - [ ] After aggregation: monthly record has values from the daily record merged via `upsertCreatorStats`
 
+### 19. Leads & Lead Notes CRUD (Convex Dashboard / CLI)
+
+- [ ] `leads.create({ submissionId, creatorId, source: "website", name: "Juan", phone: "09171234567" })` → creates lead with `status: "new"`
+- [ ] After creating a lead → creator receives `new_lead` notification
+- [ ] After creating a lead → `analytics` daily + monthly `leadsGenerated` incremented
+- [ ] `leads.updateStatus({ id, status: "contacted" })` → status changes
+- [ ] `leads.getBySubmission(submissionId)` → returns all leads for that submission
+- [ ] `leads.getByCreator(creatorId)` → returns leads across all creator's submissions
+- [ ] `leads.getCountBySubmission(submissionId)` → returns counts by status
+- [ ] `leads.remove(id)` → deletes lead AND all associated notes
+- [ ] `leadNotes.create({ leadId, creatorId, content: "Called, will visit tomorrow" })` → creates note
+- [ ] `leadNotes.getByLead(leadId)` → returns all notes for a lead
+
+### 20. Earnings CRUD (Convex Dashboard / CLI)
+
+- [ ] After `admin.markPaid` → `earnings` table has new record with `type: "submission_approved"`, `status: "available"`
+- [ ] After `admin.markPaid` → creator's `totalEarnings` is also updated
+- [ ] After referral bonus → `earnings` table has record with `type: "referral_bonus"`
+- [ ] `earnings.getByCreator(creatorId)` → returns all earnings with business names
+- [ ] `earnings.getSummary(creatorId)` → returns correct totals (total, available, pending, withdrawn, byType)
+- [ ] `earnings.getBySubmission(submissionId)` → returns earnings for that submission
+
+### 21. Withdrawals (Convex Dashboard / CLI)
+
+- [ ] `withdrawals.create({ creatorId, amount: 500, payoutMethod: "gcash", accountDetails: "09171234567" })` → creates withdrawal with `status: "pending"`
+- [ ] After creating withdrawal → creator's `balance` decreases by amount
+- [ ] Creating withdrawal with `amount < 100` → throws "Minimum withdrawal amount is ₱100"
+- [ ] Creating withdrawal with `amount > balance` → throws "Insufficient balance"
+- [ ] `withdrawals.updateStatus({ id, status: "completed", adminId, transactionRef: "GC123" })` → status changes, `processedAt` set
+- [ ] After completing withdrawal → creator's `totalWithdrawn` increases
+- [ ] After completing withdrawal → creator receives `payout_sent` notification
+- [ ] `withdrawals.updateStatus({ id, status: "failed", adminId })` → creator's `balance` restored
+- [ ] `withdrawals.getByStatus("pending")` → returns pending withdrawals with creator info
+- [ ] `withdrawals.getByCreator(creatorId)` → returns all withdrawals
+
+### 22. Payout Methods (Convex Dashboard / CLI)
+
+- [ ] `payoutMethods.save({ creatorId, type: "gcash", accountName: "Juan", accountNumber: "09171234567" })` → creates method, first one is auto-default
+- [ ] Saving a second method with `isDefault: true` → new one is default, old one is not
+- [ ] `payoutMethods.getByCreator(creatorId)` → returns all saved methods
+- [ ] `payoutMethods.getDefault(creatorId)` → returns the default method
+- [ ] `payoutMethods.setDefault(id)` → switches default
+- [ ] `payoutMethods.remove(id)` → deletes method, next one becomes default if deleted was default
+
+### 23. Settings (Convex Dashboard / CLI)
+
+- [ ] `settings.set({ key: "referral_bonus_amount", value: 100, description: "Referral bonus in PHP" })` → creates setting
+- [ ] `settings.get({ key: "referral_bonus_amount" })` → returns 100
+- [ ] `settings.set({ key: "referral_bonus_amount", value: 200 })` → updates existing (no duplicate)
+- [ ] `settings.getAll()` → returns key-value map of all settings
+- [ ] `settings.remove({ key: "referral_bonus_amount" })` → deletes setting
+
+### 24. Admin Review Tracking
+
+- [ ] After `admin.approveSubmission` → submission has `reviewedBy` set to adminId and `reviewedAt` timestamp
+- [ ] After `admin.rejectSubmission` → submission has `reviewedBy` set to adminId and `reviewedAt` timestamp
+
+### 25. Enhanced Submission Fields
+
+- [ ] `submissions.create` with `province`, `barangay`, `postalCode` → fields saved correctly
+- [ ] `submissions.create` with `coordinates: { lat: 14.5995, lng: 120.9842 }` → coordinates saved
+- [ ] After creating a submission → creator's `submissionCount` incremented and `lastActiveAt` updated
+- [ ] `submissions.update` with `businessDescription`, `platformFee` → fields saved correctly
+
 ---
 
 ## Schema Validation
 
-### 19. Convex Schema Deployment
+### 26. Convex Schema Deployment
 
 - [ ] `npx convex dev` succeeds without schema validation errors
-- [ ] All new tables exist: `notifications`, `pushTokens`, `auditLogs`, `referrals`, `analytics`, `websiteAnalytics`
-- [ ] All new fields on `creators`: `referredByCode`
-- [ ] All new fields on `submissions`: `rejectionReason`, `websiteUrl`
+- [ ] All tables exist: `creators`, `submissions`, `generatedWebsites`, `websiteContent` (deprecated), `earnings`, `withdrawals`, `payoutMethods`, `leads`, `leadNotes`, `notifications`, `pushTokens`, `referrals`, `analytics`, `websiteAnalytics`, `auditLogs`, `settings`
+- [ ] New fields on `creators`: `totalWithdrawn`, `submissionCount`, `level`, `updatedAt`, `lastActiveAt`
+- [ ] New fields on `submissions`: `businessDescription`, `province`, `barangay`, `postalCode`, `coordinates`, `aiGeneratedContent`, `reviewedBy`, `reviewedAt`, `platformFee`
+- [ ] New fields on `generatedWebsites`: `subdomain`, `customDomain`
 - [ ] All indexes created and queryable
 
 ---
@@ -215,7 +280,7 @@ This file lists all features and changes that need to be tested on the **mobile 
 - **Push notifications require APK rebuild** — `expo-notifications` is a native module, Expo Go does not support it
 - **Referral code only on email signup** — OAuth (Google) users cannot enter a referral code during signup; planned for future profile settings screen
 - **Admin UI not built yet** — All admin actions must be tested via Convex dashboard or CLI
-- **₱100 referral bonus is hardcoded** — Amount is not configurable yet (in `convex/admin.ts` line 55)
-- **`new_lead` notifications not wired** — Will be connected when leads CRUD mutations are implemented
+- **₱100 referral bonus is hardcoded** — Amount is not yet reading from `settings` table (planned)
 - **No data migration for websiteContent → generatedWebsites** — Old data still in deprecated `websiteContent` table
 - **Website analytics requires external integration** — Cloudflare Analytics API or Plausible for page view/visitor tracking
+- **No mobile screens for leads, earnings, withdrawals, or payout methods yet** — Backend CRUD is ready, app screens are planned

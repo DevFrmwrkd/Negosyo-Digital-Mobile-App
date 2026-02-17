@@ -16,6 +16,8 @@ export const approveSubmission = mutation({
 
     await ctx.db.patch(args.id, {
       status: "approved",
+      reviewedBy: args.adminId,
+      reviewedAt: Date.now(),
     });
 
     // Audit log
@@ -93,6 +95,8 @@ export const rejectSubmission = mutation({
     await ctx.db.patch(args.id, {
       status: "rejected",
       rejectionReason: args.reason,
+      reviewedBy: args.adminId,
+      reviewedAt: Date.now(),
     });
 
     // Audit log
@@ -230,14 +234,23 @@ export const markPaid = mutation({
       status: "paid",
     });
 
-    // Add payout to creator's balance
+    // Add payout to creator's balance and create earning record
     if (submission.creatorPayout) {
       const creator = await ctx.db.get(submission.creatorId);
       if (creator) {
         await ctx.db.patch(submission.creatorId, {
           balance: (creator.balance || 0) + submission.creatorPayout,
+          totalEarnings: (creator.totalEarnings || 0) + submission.creatorPayout,
         });
       }
+
+      // Create earning record
+      await ctx.scheduler.runAfter(0, internal.earnings.create, {
+        creatorId: submission.creatorId,
+        submissionId: args.id,
+        amount: submission.creatorPayout,
+        type: "submission_approved",
+      });
     }
 
     // Audit log
