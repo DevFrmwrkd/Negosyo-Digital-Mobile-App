@@ -44,7 +44,7 @@ export default defineSchema({
     airtableSyncStatus: v.optional(v.string()), // pending_push, pushed, content_received, synced, error
   }).index("by_creator_id", ["creatorId"])
     .index("by_status", ["status"])
-    .index("by_airtable_sync", ["airtableSyncStatus"]),
+    .index("by_airtable_sync", ["airtableSyncStatus"])
     .index("by_creator_status", ["creatorId", "status"])
     .index("by_city", ["city"]),
 
@@ -114,7 +114,6 @@ export default defineSchema({
     // Services and other content
     services: v.optional(v.any()),
     images: v.optional(v.any()),
-    enhancedImages: v.optional(v.any()),
     contact: v.optional(v.any()),
     contactInfo: v.optional(v.any()),
     customizations: v.optional(v.any()),
