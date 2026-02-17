@@ -152,3 +152,217 @@ Merged the `websiteContent` table fields into `generatedWebsites` to eliminate t
 - Kept for backwards compatibility with the web app on the other branch
 
 **Result:** Single table (`generatedWebsites`) now holds both website deployment data AND AI-generated content. One query per submission instead of two. The deprecated `websiteContent` table remains in schema for existing data and will be removed after data migration.
+
+---
+
+## Phase 3 — Engagement & Trust
+
+### [Schema + Backend + App] Push Notifications — P1
+
+Added a full notification system with in-app storage and Expo push notification delivery.
+
+**`convex/schema.ts`** — Added 2 new tables + 2 missing fields:
+
+**`notifications` table** — Stores all in-app notifications per creator.
+- `creatorId: v.id("creators")` — notification recipient
+- `type: v.union("submission_approved", "submission_rejected", "new_lead", "payout_sent", "website_live", "system")` — event type
+- `title: v.string()` — notification title
+- `body: v.string()` — notification body text
+- `data: v.optional(v.any())` — flexible payload for deep linking (submissionId, leadId, websiteUrl, amount, etc.)
+- `read: v.boolean()` — read/unread state for badge count
+- `sentAt: v.number()` — timestamp
+- Indexes: `by_creator` (all notifications), `by_creator_unread` (compound index for fast unread count)
+
+**`pushTokens` table** — Stores Expo/FCM push tokens per device.
+- `creatorId: v.id("creators")` — token owner
+- `token: v.string()` — Expo push token
+- `platform: v.union("ios", "android", "web")` — device platform
+- `active: v.boolean()` — deactivated when device unregisters or token is invalid
+- Indexes: `by_creator` (all devices), `by_token` (dedup on registration)
+
+**Added missing fields to `submissions` table:**
+- `rejectionReason: v.optional(v.string())` — used by `admin.rejectSubmission` but was missing from schema
+- `websiteUrl: v.optional(v.string())` — used by `admin.markDeployed` and `admin.markWebsiteGenerated` but was missing
+
+**`convex/notifications.ts`** — New file with full notification backend:
+
+*Internal mutations:*
+- `createAndSend` — Creates notification record in DB + schedules push delivery. Called by admin mutations and future event handlers.
+
+*Push notification delivery:*
+- `sendPushNotification` — Internal action that fetches active push tokens for the creator, sends via Expo Push API (`https://exp.host/--/api/v2/push/send`), and auto-deactivates tokens that return `DeviceNotRegistered`.
+
+*Token management:*
+- `registerPushToken` — Public mutation called by the app on launch. Upserts token (dedup by token string, reactivates if exists).
+- `removePushToken` — Public mutation called on logout. Deactivates the token.
+- `getActiveTokens` — Internal query for push delivery.
+- `deactivateToken` — Internal mutation for invalid token cleanup.
+
+*Public queries:*
+- `getByCreator` — All notifications for a creator, newest first
+- `getUnreadCount` — Fast unread badge count using compound index
+- `markAsRead` — Mark single notification as read
+- `markAllAsRead` — Mark all unread notifications as read
+
+**`convex/admin.ts`** — Wired notifications into all admin status changes:
+
+| Admin Action | Notification Type | When |
+|---|---|---|
+| `approveSubmission` | `submission_approved` | After status → "approved" |
+| `rejectSubmission` | `submission_rejected` | After status → "rejected" (includes reason in body) |
+| `markDeployed` | `website_live` | After status → "deployed" (includes websiteUrl in data) |
+| `markPaid` | `payout_sent` | After status → "paid" (includes amount in data) |
+
+Each notification includes the `submissionId` in `data` for deep linking. The `markWebsiteGenerated` step does NOT send a notification (intermediate state before deploy).
+
+**How it works end-to-end:**
+1. Admin triggers action (e.g., approves submission)
+2. Mutation updates submission status
+3. `ctx.scheduler.runAfter(0, internal.notifications.createAndSend, ...)` — schedules notification creation
+4. `createAndSend` inserts notification into DB (instant in-app visibility via Convex reactivity)
+5. `createAndSend` schedules `sendPushNotification` action
+6. `sendPushNotification` fetches active tokens → sends via Expo Push API → auto-cleans invalid tokens
+
+**App integration required:**
+- Call `notifications.registerPushToken` on app launch (after getting Expo push token)
+- Call `notifications.removePushToken` on logout
+- Use `notifications.getByCreator` to render notification list
+- Use `notifications.getUnreadCount` for badge on bell icon
+- `new_lead` notifications will be wired in when leads CRUD is implemented
+
+### [App] Push Notification Registration & Notifications Screen — P1
+
+Integrated push notifications and an in-app notifications UI into the mobile app.
+
+**`hooks/usePushNotifications.ts`** — New hook for Expo push token registration:
+- Configures foreground notification handler (`shouldShowAlert`, `shouldPlaySound`, `shouldSetBadge`)
+- On mount (if `creatorId` exists): checks `Device.isDevice`, requests permissions, creates Android notification channel
+- Gets Expo push token using project ID `2adbda2f-fecd-4fdd-91b8-56db76e0c780`
+- Calls `api.notifications.registerPushToken` to save token in Convex
+- Uses `useRef` guard to prevent duplicate registrations
+
+**`app/(app)/notifications.tsx`** — New notifications screen:
+- Back button + "Mark all read" action (only visible when unread count > 0)
+- Color-coded icons: emerald (approved/payout), red (rejected), blue (new lead), purple (website live), zinc (system)
+- `timeAgo()` helper: "Just now" / "5m ago" / "2h ago" / "3d ago" / full date
+- Tapping notification: marks as read + deep links to submission detail (if `data.submissionId` exists)
+- Unread state: green tint background + green dot indicator
+- Empty state with `notifications-off-outline` icon
+
+**`app/(app)/dashboard.tsx`** — Added notification bell + push registration:
+- Imported `usePushNotifications` hook, called with `creator?._id`
+- Added `unreadCount` query from `api.notifications.getUnreadCount`
+- Bell icon (`notifications-outline`) in header, navigates to `/(app)/notifications`
+- Red badge with white text shows unread count (caps at "99+")
+
+**`app.json`** — Added `expo-notifications` plugin with icon and green accent color (`#10b981`)
+
+**`package.json`** — Added `expo-notifications: ~0.32.16` and `expo-device: ~8.0.10`
+
+**Note:** Requires APK rebuild for native `expo-notifications` module to be bundled.
+
+---
+
+### [Schema + Backend] Audit Logs — P1
+
+Added an audit trail system to track all admin actions for accountability and debugging.
+
+**`convex/schema.ts`** — Added `auditLogs` table:
+- `adminId: v.string()` — Clerk user ID of the admin performing the action
+- `action: v.union(...)` — 8 action types:
+  - `submission_approved`, `submission_rejected` — review decisions
+  - `website_generated`, `website_deployed` — deployment pipeline
+  - `payment_sent` — financial actions
+  - `submission_deleted`, `creator_updated`, `manual_override` — future admin actions
+- `targetType: v.union("submission", "creator", "website", "withdrawal")` — what was affected
+- `targetId: v.string()` — ID of the affected record
+- `metadata: v.optional(v.any())` — additional context (reason, old/new values, business name, amount, etc.)
+- `timestamp: v.number()` — when the action occurred
+- Indexes: `by_admin`, `by_target` (compound: targetType + targetId), `by_action`, `by_timestamp`
+
+**`convex/auditLogs.ts`** — New file with audit log CRUD:
+
+*Internal mutation:*
+- `log` — Called by admin mutations via `ctx.scheduler.runAfter(0, ...)`. Inserts an audit record with all context.
+
+*Public queries (for admin dashboard):*
+- `getByTarget(targetType, targetId)` — Full audit history for a specific submission/creator/website/withdrawal
+- `getRecent(limit?)` — Most recent audit entries (default 50), for admin activity feed
+- `getByAdmin(adminId, limit?)` — All actions by a specific admin
+
+**`convex/admin.ts`** — Wired audit logging into all 5 admin mutations:
+
+| Mutation | Audit Action | Metadata Captured |
+|---|---|---|
+| `approveSubmission` | `submission_approved` | businessName, previousStatus |
+| `rejectSubmission` | `submission_rejected` | businessName, reason, previousStatus |
+| `markWebsiteGenerated` | `website_generated` | businessName, websiteUrl |
+| `markDeployed` | `website_deployed` | businessName, websiteUrl |
+| `markPaid` | `payment_sent` | businessName, amount, creatorId |
+
+**Breaking change:** All admin mutations now require an `adminId: v.string()` argument. The admin dashboard must pass the Clerk user ID when calling these mutations.
+
+**How it works:**
+1. Admin triggers action (e.g., approves submission) — passes their Clerk `userId` as `adminId`
+2. Mutation performs the status change
+3. `ctx.scheduler.runAfter(0, internal.auditLogs.log, ...)` creates the audit record asynchronously
+4. Audit records can be queried per target (submission history), per admin (accountability), or globally (activity feed)
+
+---
+
+### [Schema + Backend + App] Referral System — P2
+
+Added a complete referral tracking system to drive organic growth through word-of-mouth.
+
+**`convex/schema.ts`** — Changes:
+
+*Added `referredByCode` field to `creators` table:*
+- `referredByCode: v.optional(v.string())` — the referral code used during signup
+
+*Added `referrals` table:*
+- `referrerId: v.id("creators")` — creator who shared the referral code
+- `referredId: v.id("creators")` — creator who signed up with the code
+- `referralCode: v.string()` — the code that was used
+- `status: v.union("pending", "qualified", "paid")` — lifecycle:
+  - `pending` — referred user signed up but no approved submission yet
+  - `qualified` — referred user's first submission was approved (bonus credited)
+  - `paid` — bonus has been withdrawn (future use)
+- `bonusAmount: v.optional(v.number())` — bonus in PHP, set when qualified
+- `qualifiedAt: v.optional(v.number())` — when referral qualified
+- `paidAt: v.optional(v.number())` — when bonus was withdrawn
+- `createdAt: v.number()` — when the referral was created
+- Indexes: `by_referrer`, `by_referred`, `by_status`
+
+**`convex/referrals.ts`** — New file with referral CRUD:
+
+*Internal mutations:*
+- `createFromSignup` — Called when a new creator signs up with a referral code. Deduplicates by `referredId`. Creates a `pending` referral record linking referrer → referred.
+- `qualifyByCreator` — Called when a referred creator's first submission is approved. Marks referral as `qualified`, creates a `referral_bonus` earning for the referrer, updates referrer's balance and totalEarnings, and sends a notification.
+
+*Public queries:*
+- `getByReferrer(referrerId)` — All referrals made by a creator, enriched with referred creator names
+- `getStats(referrerId)` — Dashboard stats: total, pending, qualified, paid counts + total earned
+
+**`convex/creators.ts`** — Updated create mutation:
+- Added `referredByCode: v.optional(v.string())` argument
+- On signup, if `referredByCode` is provided: looks up the referrer via `by_referral_code` index, creates a referral record via `ctx.scheduler.runAfter(0, internal.referrals.createFromSignup, ...)`
+- Self-referral protection: skips if `referrer._id === creatorId`
+
+**`convex/admin.ts`** — Updated `approveSubmission`:
+- After approving, checks if the creator was referred (queries `referrals` by `by_referred` index)
+- If a `pending` referral exists and this is the creator's first approved submission, schedules `internal.referrals.qualifyByCreator` with a ₱100 bonus amount
+- The bonus amount is hardcoded at ₱100 for now — can be made configurable later
+
+**`app/(auth)/signup.tsx`** — Added referral code input:
+- New `referredByCode` state variable
+- New text input field after "Confirm Password" with gift icon, auto-capitalizes, labeled "Optional"
+- Passed to `createCreator({ ..., referredByCode })` during email verification
+
+**End-to-end flow:**
+1. Creator A shares their referral code (e.g., `JUA8K3MN`) with Creator B
+2. Creator B enters the code during signup → `creators.create` stores `referredByCode` and creates a `pending` referral record
+3. Creator B submits a business → admin approves it
+4. `approveSubmission` detects this is Creator B's first approval and a pending referral exists
+5. `qualifyByCreator` marks referral as `qualified`, credits ₱100 to Creator A's balance, creates an earning record, and sends a push notification
+
+**Note:** Referral code input is only available on email signup. OAuth (Google) users can be supported later via a profile settings screen or deep link parameters.

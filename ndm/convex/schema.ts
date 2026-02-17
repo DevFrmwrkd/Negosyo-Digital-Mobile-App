@@ -12,6 +12,7 @@ export default defineSchema({
     balance: v.optional(v.number()),
     createdAt: v.optional(v.number()),
     referralCode: v.optional(v.string()),
+    referredByCode: v.optional(v.string()), // Referral code used during signup
     role: v.optional(v.string()),
     status: v.optional(v.string()),
     totalEarnings: v.optional(v.number()),
@@ -37,7 +38,9 @@ export default defineSchema({
     transcript: v.optional(v.string()),
     transcriptionStatus: v.optional(v.string()), // processing, complete, failed, skipped
     transcriptionError: v.optional(v.string()),
-    status: v.string(), // draft, pending, approved, rejected, website_generated, deployed, paid, in_review
+    status: v.string(), // draft, submitted, approved, rejected, website_generated, deployed, paid, in_review
+    rejectionReason: v.optional(v.string()),
+    websiteUrl: v.optional(v.string()),
     creatorPayout: v.optional(v.number()),
     amount: v.optional(v.number()),
     airtableRecordId: v.optional(v.string()), // Airtable record ID (starts with "rec")
@@ -274,4 +277,73 @@ export default defineSchema({
     content: v.string(),
     createdAt: v.number(),
   }).index("by_lead", ["leadId"]),
+
+  notifications: defineTable({
+    creatorId: v.id("creators"),
+    type: v.union(
+      v.literal("submission_approved"),
+      v.literal("submission_rejected"),
+      v.literal("new_lead"),
+      v.literal("payout_sent"),
+      v.literal("website_live"),
+      v.literal("system"),
+    ),
+    title: v.string(),
+    body: v.string(),
+    data: v.optional(v.any()), // Flexible payload (submissionId, leadId, etc.)
+    read: v.boolean(),
+    sentAt: v.number(),
+  }).index("by_creator", ["creatorId"])
+    .index("by_creator_unread", ["creatorId", "read"]),
+
+  pushTokens: defineTable({
+    creatorId: v.id("creators"),
+    token: v.string(),
+    platform: v.union(v.literal("ios"), v.literal("android"), v.literal("web")),
+    active: v.boolean(),
+  }).index("by_creator", ["creatorId"])
+    .index("by_token", ["token"]),
+
+  referrals: defineTable({
+    referrerId: v.id("creators"), // Creator who shared the referral code
+    referredId: v.id("creators"), // Creator who signed up with the code
+    referralCode: v.string(), // The code that was used
+    status: v.union(
+      v.literal("pending"),    // Referred user signed up but no approved submission yet
+      v.literal("qualified"),  // Referred user's first submission was approved
+      v.literal("paid"),       // Referral bonus has been paid out
+    ),
+    bonusAmount: v.optional(v.number()), // Bonus amount in PHP (set when qualified)
+    qualifiedAt: v.optional(v.number()), // When the referral qualified
+    paidAt: v.optional(v.number()), // When the bonus was paid out
+    createdAt: v.number(),
+  }).index("by_referrer", ["referrerId"])
+    .index("by_referred", ["referredId"])
+    .index("by_status", ["status"]),
+
+  auditLogs: defineTable({
+    adminId: v.string(), // Clerk user ID of the admin performing the action
+    action: v.union(
+      v.literal("submission_approved"),
+      v.literal("submission_rejected"),
+      v.literal("website_generated"),
+      v.literal("website_deployed"),
+      v.literal("payment_sent"),
+      v.literal("submission_deleted"),
+      v.literal("creator_updated"),
+      v.literal("manual_override"),
+    ),
+    targetType: v.union(
+      v.literal("submission"),
+      v.literal("creator"),
+      v.literal("website"),
+      v.literal("withdrawal"),
+    ),
+    targetId: v.string(), // ID of the affected record
+    metadata: v.optional(v.any()), // Additional context (reason, old/new values, etc.)
+    timestamp: v.number(),
+  }).index("by_admin", ["adminId"])
+    .index("by_target", ["targetType", "targetId"])
+    .index("by_action", ["action"])
+    .index("by_timestamp", ["timestamp"]),
 });

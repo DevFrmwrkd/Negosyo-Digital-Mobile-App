@@ -13,6 +13,7 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { usePushNotifications } from '../../hooks/usePushNotifications';
 
 function generateReferralCode(firstName: string, lastName: string): string {
   const namePrefix = ((firstName || 'U').substring(0, 2) + (lastName || 'U').substring(0, 1)).toUpperCase();
@@ -38,6 +39,15 @@ export default function DashboardScreen() {
     api.submissions.getByCreatorId,
     creator?._id ? { creatorId: creator._id } : 'skip'
   );
+
+  // Notifications
+  const unreadCount = useQuery(
+    api.notifications.getUnreadCount,
+    creator?._id ? { creatorId: creator._id } : 'skip'
+  );
+
+  // Register push token on launch
+  usePushNotifications(creator?._id);
 
   // Auto-create creator profile if missing (for OAuth users)
   useEffect(() => {
@@ -125,12 +135,29 @@ export default function DashboardScreen() {
                 </Text>
               </View>
             </View>
-            <TouchableOpacity
-              className="p-2"
-              onPress={handleSignOut}
-            >
-              <Ionicons name="log-out-outline" size={24} color="#71717a" />
-            </TouchableOpacity>
+            <View className="flex-row items-center">
+              <TouchableOpacity
+                className="p-2 mr-1"
+                onPress={() => router.push('/(app)/notifications' as any)}
+              >
+                <View>
+                  <Ionicons name="notifications-outline" size={24} color="#71717a" />
+                  {(unreadCount ?? 0) > 0 && (
+                    <View className="absolute -top-1 -right-1 bg-red-500 rounded-full min-w-[18px] h-[18px] items-center justify-center">
+                      <Text className="text-white text-[10px] font-bold">
+                        {unreadCount! > 99 ? '99+' : unreadCount}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="p-2"
+                onPress={handleSignOut}
+              >
+                <Ionicons name="log-out-outline" size={24} color="#71717a" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
