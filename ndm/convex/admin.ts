@@ -1,6 +1,9 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { getTodayString, getCurrentMonthString } from "./analytics";
+
+
 
 export const approveSubmission = mutation({
   args: {
@@ -31,6 +34,24 @@ export const approveSubmission = mutation({
       title: "Submission Approved!",
       body: `Your submission for "${submission.businessName}" has been approved.`,
       data: { submissionId: args.id },
+    });
+
+    // Analytics — increment approvedCount
+    const today = getTodayString();
+    const month = getCurrentMonthString();
+    await ctx.scheduler.runAfter(0, internal.analytics.incrementStat, {
+      creatorId: submission.creatorId,
+      period: today,
+      periodType: "daily",
+      field: "approvedCount",
+      delta: 1,
+    });
+    await ctx.scheduler.runAfter(0, internal.analytics.incrementStat, {
+      creatorId: submission.creatorId,
+      period: month,
+      periodType: "monthly",
+      field: "approvedCount",
+      delta: 1,
     });
 
     // Check if this creator was referred — qualify referral on first approved submission
@@ -81,6 +102,24 @@ export const rejectSubmission = mutation({
       targetType: "submission",
       targetId: args.id,
       metadata: { businessName: submission.businessName, reason: args.reason, previousStatus: submission.status },
+    });
+
+    // Analytics — increment rejectedCount
+    const today = getTodayString();
+    const month = getCurrentMonthString();
+    await ctx.scheduler.runAfter(0, internal.analytics.incrementStat, {
+      creatorId: submission.creatorId,
+      period: today,
+      periodType: "daily",
+      field: "rejectedCount",
+      delta: 1,
+    });
+    await ctx.scheduler.runAfter(0, internal.analytics.incrementStat, {
+      creatorId: submission.creatorId,
+      period: month,
+      periodType: "monthly",
+      field: "rejectedCount",
+      delta: 1,
     });
 
     // Notify creator
@@ -146,6 +185,24 @@ export const markDeployed = mutation({
       metadata: { businessName: submission.businessName, websiteUrl: args.websiteUrl },
     });
 
+    // Analytics — increment websitesLive
+    const today = getTodayString();
+    const month = getCurrentMonthString();
+    await ctx.scheduler.runAfter(0, internal.analytics.incrementStat, {
+      creatorId: submission.creatorId,
+      period: today,
+      periodType: "daily",
+      field: "websitesLive",
+      delta: 1,
+    });
+    await ctx.scheduler.runAfter(0, internal.analytics.incrementStat, {
+      creatorId: submission.creatorId,
+      period: month,
+      periodType: "monthly",
+      field: "websitesLive",
+      delta: 1,
+    });
+
     // Notify creator that website is live
     await ctx.scheduler.runAfter(0, internal.notifications.createAndSend, {
       creatorId: submission.creatorId,
@@ -195,6 +252,26 @@ export const markPaid = mutation({
         creatorId: submission.creatorId,
       },
     });
+
+    // Analytics — increment earningsTotal
+    const today = getTodayString();
+    const month = getCurrentMonthString();
+    if (submission.creatorPayout) {
+      await ctx.scheduler.runAfter(0, internal.analytics.incrementStat, {
+        creatorId: submission.creatorId,
+        period: today,
+        periodType: "daily",
+        field: "earningsTotal",
+        delta: submission.creatorPayout,
+      });
+      await ctx.scheduler.runAfter(0, internal.analytics.incrementStat, {
+        creatorId: submission.creatorId,
+        period: month,
+        periodType: "monthly",
+        field: "earningsTotal",
+        delta: submission.creatorPayout,
+      });
+    }
 
     // Notify creator about payout
     await ctx.scheduler.runAfter(0, internal.notifications.createAndSend, {

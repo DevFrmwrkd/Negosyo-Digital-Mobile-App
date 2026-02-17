@@ -1,6 +1,7 @@
 import { mutation, query, internalMutation, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { getTodayString, getCurrentMonthString } from "./analytics";
 
 export const create = mutation({
   args: {
@@ -129,6 +130,24 @@ export const submit = mutation({
       amount: 1000, // Fixed amount for all submissions
       // Initialize Airtable sync status
       airtableSyncStatus: "pending_push",
+    });
+
+    // Analytics — increment submissionsCount
+    const today = getTodayString();
+    const month = getCurrentMonthString();
+    await ctx.scheduler.runAfter(0, internal.analytics.incrementStat, {
+      creatorId: submission.creatorId,
+      period: today,
+      periodType: "daily",
+      field: "submissionsCount",
+      delta: 1,
+    });
+    await ctx.scheduler.runAfter(0, internal.analytics.incrementStat, {
+      creatorId: submission.creatorId,
+      period: month,
+      periodType: "monthly",
+      field: "submissionsCount",
+      delta: 1,
     });
 
     // Schedule push to Airtable for AI image enhancement

@@ -366,3 +366,72 @@ Added a complete referral tracking system to drive organic growth through word-o
 5. `qualifyByCreator` marks referral as `qualified`, credits ₱100 to Creator A's balance, creates an earning record, and sends a push notification
 
 **Note:** Referral code input is only available on email signup. OAuth (Google) users can be supported later via a profile settings screen or deep link parameters.
+
+---
+
+### [Schema + Backend] Analytics — P2
+
+Added analytics tables for tracking creator performance and website engagement metrics.
+
+**`convex/schema.ts`** — Added 2 new tables:
+
+**`analytics` table** — Aggregated creator performance stats per period.
+- `creatorId: v.id("creators")` — which creator
+- `period: v.string()` — period key: `"2026-02"` for monthly, `"2026-02-17"` for daily
+- `periodType: v.union("daily", "monthly")` — granularity
+- `submissionsCount: v.number()` — total submissions in period
+- `approvedCount: v.number()` — approved submissions
+- `rejectedCount: v.number()` — rejected submissions
+- `leadsGenerated: v.number()` — leads from this creator's websites
+- `earningsTotal: v.number()` — total earnings in PHP
+- `websitesLive: v.number()` — deployed websites
+- `referralsCount: v.number()` — referrals made
+- `updatedAt: v.number()` — last update timestamp
+- Indexes: `by_creator_period` (compound: creatorId + periodType + period), `by_period` (periodType + period for platform-wide aggregation)
+
+**`websiteAnalytics` table** — Daily engagement stats per deployed website.
+- `submissionId: v.id("submissions")` — which website
+- `date: v.string()` — date key `"2026-02-17"`
+- `pageViews: v.number()` — total page views
+- `uniqueVisitors: v.number()` — unique visitors
+- `contactClicks: v.number()` — contact button clicks
+- `whatsappClicks: v.number()` — WhatsApp button clicks
+- `phoneClicks: v.number()` — phone number clicks
+- `formSubmissions: v.number()` — contact form submissions
+- `updatedAt: v.number()` — last update timestamp
+- Indexes: `by_submission_date` (compound: submissionId + date), `by_date` (for admin daily overview)
+
+**`convex/analytics.ts`** — New file with analytics CRUD:
+
+*Internal mutations (for event tracking and scheduled aggregation):*
+- `upsertCreatorStats(creatorId, period, periodType, stats)` — Create or update a creator's analytics record for a period
+- `incrementStat(creatorId, period, periodType, field, delta)` — Increment a single stat field (for real-time event-driven updates)
+- `upsertWebsiteStats(submissionId, date, stats)` — Create or update website analytics for a date
+
+*Public queries:*
+- `getCreatorStats(creatorId, periodType, fromPeriod?, toPeriod?)` — Creator's analytics over a date range (for creator dashboard charts)
+- `getPlatformStats(periodType, period)` — Platform-wide aggregated stats for a period (for admin dashboard)
+- `getWebsiteStats(submissionId, fromDate?, toDate?)` — Website daily stats + totals (for website performance view)
+- `getWebsiteStatsByDate(date)` — All website stats for a specific date (admin daily overview)
+
+*Helpers:*
+- `getTodayString()` — Returns `"YYYY-MM-DD"` for today
+- `getCurrentMonthString()` — Returns `"YYYY-MM"` for current month
+
+**Wired into admin mutations (`convex/admin.ts`):**
+- `approveSubmission` → increments `approvedCount` (daily + monthly)
+- `rejectSubmission` → increments `rejectedCount` (daily + monthly)
+- `markDeployed` → increments `websitesLive` (daily + monthly)
+- `markPaid` → increments `earningsTotal` by `creatorPayout` amount (daily + monthly)
+
+**Wired into submissions (`convex/submissions.ts`):**
+- `submit` → increments `submissionsCount` (daily + monthly) when a draft is submitted
+
+**Scheduled aggregation (`convex/crons.ts` + `convex/analyticsJobs.ts`):**
+- Daily cron runs at midnight UTC
+- `aggregateDailyToMonthly` — Rolls up yesterday's daily stats into the corresponding monthly record via `upsertCreatorStats`
+- `getDailyRecords` — Internal query to fetch all daily analytics for a given date
+
+**Remaining integration:**
+- Integrate Cloudflare Analytics API or Plausible for website traffic data
+- Website click tracking via event listeners on deployed websites → API endpoint → `upsertWebsiteStats`

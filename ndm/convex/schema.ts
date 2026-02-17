@@ -321,6 +321,34 @@ export default defineSchema({
     .index("by_referred", ["referredId"])
     .index("by_status", ["status"]),
 
+  analytics: defineTable({
+    creatorId: v.id("creators"),
+    period: v.string(), // "2026-02" for monthly, "2026-02-17" for daily
+    periodType: v.union(v.literal("daily"), v.literal("monthly")),
+    submissionsCount: v.number(),
+    approvedCount: v.number(),
+    rejectedCount: v.number(),
+    leadsGenerated: v.number(),
+    earningsTotal: v.number(),
+    websitesLive: v.number(),
+    referralsCount: v.number(),
+    updatedAt: v.number(),
+  }).index("by_creator_period", ["creatorId", "periodType", "period"])
+    .index("by_period", ["periodType", "period"]),
+
+  websiteAnalytics: defineTable({
+    submissionId: v.id("submissions"),
+    date: v.string(), // "2026-02-17"
+    pageViews: v.number(),
+    uniqueVisitors: v.number(),
+    contactClicks: v.number(),
+    whatsappClicks: v.number(),
+    phoneClicks: v.number(),
+    formSubmissions: v.number(),
+    updatedAt: v.number(),
+  }).index("by_submission_date", ["submissionId", "date"])
+    .index("by_date", ["date"]),
+
   auditLogs: defineTable({
     adminId: v.string(), // Clerk user ID of the admin performing the action
     action: v.union(
