@@ -159,14 +159,51 @@ This file lists all features and changes that need to be tested on the **mobile 
 - [ ] `notifications.getByCreator(creatorId)` → returns all notifications newest first
 - [ ] `notifications.getUnreadCount(creatorId)` → returns correct count
 
+### 15. Analytics — Creator Stats (Convex Dashboard / CLI)
+
+- [ ] `analytics.upsertCreatorStats(creatorId, "2026-02", "monthly", { submissionsCount: 5 })` → creates new record
+- [ ] Calling again with same creatorId + period → updates existing record (no duplicate)
+- [ ] `analytics.incrementStat(creatorId, "2026-02-17", "daily", "approvedCount", 1)` → creates record with approvedCount: 1
+- [ ] Calling incrementStat again → increments to 2 (not resets)
+- [ ] `analytics.getCreatorStats(creatorId, "monthly")` → returns all monthly records for creator
+- [ ] `analytics.getCreatorStats(creatorId, "daily", "2026-02-01", "2026-02-28")` → returns only records in range
+- [ ] `analytics.getPlatformStats("monthly", "2026-02")` → returns aggregated totals across all creators + `creatorsActive` count
+
+### 16. Analytics — Website Stats (Convex Dashboard / CLI)
+
+- [ ] `analytics.upsertWebsiteStats(submissionId, "2026-02-17", { pageViews: 100 })` → creates new record
+- [ ] Calling again with same submissionId + date → updates existing (no duplicate)
+- [ ] `analytics.getWebsiteStats(submissionId)` → returns `{ daily: [...], totals: { pageViews, uniqueVisitors, ... } }`
+- [ ] `analytics.getWebsiteStats(submissionId, "2026-02-01", "2026-02-15")` → returns only records in date range
+- [ ] `analytics.getWebsiteStatsByDate("2026-02-17")` → returns all website stats for that date
+
+### 17. Analytics — Wired into Admin Mutations (End-to-End)
+
+- [ ] Approve a submission → `analytics` table has a daily record with `approvedCount: 1` for today's date
+- [ ] Approve a submission → `analytics` table has a monthly record with `approvedCount: 1` for this month
+- [ ] Reject a submission → daily + monthly records have `rejectedCount` incremented
+- [ ] Deploy a website (`markDeployed`) → daily + monthly records have `websitesLive` incremented
+- [ ] Mark paid (`markPaid`) with `creatorPayout: 500` → daily + monthly `earningsTotal` increased by 500
+- [ ] Mark paid with no `creatorPayout` → `earningsTotal` NOT incremented (guarded by `if` check)
+- [ ] Submit a draft (`submissions.submit`) → daily + monthly records have `submissionsCount` incremented
+- [ ] Approve 3 submissions for same creator on same day → daily `approvedCount` is 3, monthly `approvedCount` is 3
+
+### 18. Analytics — Scheduled Aggregation Cron
+
+- [ ] `convex/crons.ts` deploys successfully with `npx convex dev`
+- [ ] Cron job `aggregate monthly stats` is registered (visible in Convex dashboard → Scheduled Functions)
+- [ ] `analyticsJobs.getDailyRecords("2026-02-17")` → returns all daily analytics for that date
+- [ ] `analyticsJobs.aggregateDailyToMonthly` → rolls up yesterday's daily records into monthly (test via Convex dashboard manual trigger)
+- [ ] After aggregation: monthly record has values from the daily record merged via `upsertCreatorStats`
+
 ---
 
 ## Schema Validation
 
-### 15. Convex Schema Deployment
+### 19. Convex Schema Deployment
 
 - [ ] `npx convex dev` succeeds without schema validation errors
-- [ ] All new tables exist: `notifications`, `pushTokens`, `auditLogs`, `referrals`
+- [ ] All new tables exist: `notifications`, `pushTokens`, `auditLogs`, `referrals`, `analytics`, `websiteAnalytics`
 - [ ] All new fields on `creators`: `referredByCode`
 - [ ] All new fields on `submissions`: `rejectionReason`, `websiteUrl`
 - [ ] All indexes created and queryable
@@ -181,3 +218,4 @@ This file lists all features and changes that need to be tested on the **mobile 
 - **₱100 referral bonus is hardcoded** — Amount is not configurable yet (in `convex/admin.ts` line 55)
 - **`new_lead` notifications not wired** — Will be connected when leads CRUD mutations are implemented
 - **No data migration for websiteContent → generatedWebsites** — Old data still in deprecated `websiteContent` table
+- **Website analytics requires external integration** — Cloudflare Analytics API or Plausible for page view/visitor tracking

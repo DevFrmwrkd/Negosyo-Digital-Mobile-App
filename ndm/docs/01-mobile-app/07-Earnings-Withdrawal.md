@@ -1,0 +1,250 @@
+# Earnings & Withdrawal System — Negosyo Digital
+
+## Overview
+
+Creators earn money through approved submissions, referral bonuses, and lead bonuses. Their earnings accumulate as a balance which they can withdraw via Philippine payment channels (GCash, Maya, bank transfer). The admin reviews and processes withdrawals manually.
+
+---
+
+## Schema (Convex)
+
+### `creators` table (earning-related fields)
+
+```ts
+// convex/schema.ts — relevant fields on creators
+creators: defineTable({
+  // ... identity fields (clerkId, email, name, etc.)
+  balance: v.optional(v.number()),        // Current withdrawable balance in PHP (₱)
+  totalEarnings: v.optional(v.number()),  // Lifetime earnings (never decreases)
+  // ...
+})
+```
+
+- `balance` — decreases when a withdrawal is processed, increases when earnings are credited
+- `totalEarnings` — only increases (total career earnings for display)
+
+### `earnings` table
+
+Tracks individual earning events per creator per submission.
+
+```ts
+// convex/schema.ts
+earnings: defineTable({
+  creatorId: v.id("creators"),        // Which creator earned it
+  submissionId: v.id("submissions"),  // Which submission triggered it
+  amount: v.number(),                 // Payout amount in PHP (₱)
+  type: v.union(
+    v.literal("submission_approved"), // Earned from an approved business submission
+    v.literal("referral_bonus"),      // Earned from referring a new creator (₱100)
+    v.literal("lead_bonus"),          // Earned from leads generated (planned)
+  ),
+  status: v.union(
+    v.literal("pending"),             // Earning recorded but not yet available
+    v.literal("available"),           // Available for withdrawal
+    v.literal("withdrawn"),           // Already withdrawn
+  ),
+  createdAt: v.number(),              // Timestamp (Date.now())
+})
+  .index("by_creator", ["creatorId"])       // All earnings for a creator
+  .index("by_submission", ["submissionId"]), // Earnings tied to a submission
+```
+
+### `withdrawals` table
+
+Tracks payout requests from creators.
+
+```ts
+// convex/schema.ts
+withdrawals: defineTable({
+  creatorId: v.id("creators"),       // Who is withdrawing
+  amount: v.number(),                // Withdrawal amount in PHP (₱)
+  payoutMethod: v.union(
+    v.literal("gcash"),              // GCash (most common in PH)
+    v.literal("maya"),               // Maya (formerly PayMaya)
+    v.literal("bank_transfer"),      // Direct bank transfer
+  ),
+  accountDetails: v.string(),        // Account number or name
+  status: v.union(
+    v.literal("pending"),            // Submitted, awaiting admin review
+    v.literal("processing"),         // Admin is processing the payout
+    v.literal("completed"),          // Payout sent successfully
+    v.literal("failed"),             // Payout failed (insufficient funds, wrong details)
+  ),
+  processedAt: v.optional(v.number()),    // When admin processed it
+  transactionRef: v.optional(v.string()), // External transaction reference (GCash ref #, etc.)
+  createdAt: v.number(),                  // Timestamp
+})
+  .index("by_creator", ["creatorId"])  // All withdrawals for a creator
+  .index("by_status", ["status"]),     // Filter by processing stage (admin queue)
+```
+
+### `payoutMethods` table
+
+Stores saved payout methods so creators don't re-enter account details each time.
+
+```ts
+// convex/schema.ts
+payoutMethods: defineTable({
+  creatorId: v.id("creators"),   // Owner
+  type: v.union(
+    v.literal("gcash"),
+    v.literal("maya"),
+    v.literal("bank_transfer"),
+  ),
+  accountName: v.string(),       // Account holder name
+  accountNumber: v.string(),     // Account number
+  isDefault: v.boolean(),        // Whether this is the default payout method
+})
+  .index("by_creator", ["creatorId"]), // All saved methods for a creator
+```
+
+---
+
+## Earning Types
+
+### Submission Approved (`submission_approved`)
+
+When an admin marks a submission as "paid" via `admin.markPaid`:
+1. Submission status changes to `"paid"`
+2. `submission.creatorPayout` is added to the creator's `balance`
+3. An earning record is created with `type: "submission_approved"`
+4. A `payout_sent` notification is sent to the creator
+
+**Current payout amount:** Set per-submission via `creatorPayout` field (typically ₱1,000).
+
+### Referral Bonus (`referral_bonus`)
+
+When a referred creator's first submission is approved:
+1. `admin.approveSubmission` detects it's the first approval for this creator
+2. Checks `referrals` table for a `pending` referral
+3. Calls `internal.referrals.qualifyByCreator` which:
+   - Marks the referral as `"qualified"`
+   - Creates an earning record: `type: "referral_bonus"`, `amount: 100`
+   - Adds ₱100 to the referrer's `balance` and `totalEarnings`
+   - Sends a "Referral Bonus Earned!" notification to the referrer
+
+**Current bonus amount:** ₱100 (hardcoded in `convex/admin.ts`).
+
+### Lead Bonus (`lead_bonus`)
+
+Planned feature — creators will earn a bonus for each qualified or converted lead generated by their deployed websites.
+
+---
+
+## Earning Lifecycle
+
+```
+Event occurs (submission approved / referral qualified)
+    ↓
+Earning record created (status: "pending")
+    ↓
+Admin processes payment or system auto-releases
+    ↓
+Earning becomes available (status: "available")
+    ↓
+Creator requests withdrawal
+    ↓
+Earning marked as withdrawn (status: "withdrawn")
+```
+
+> **Current behavior:** `admin.markPaid` directly adds to the creator's `balance` without going through the `"pending" → "available"` lifecycle. This will be refined when the withdrawal flow is built.
+
+---
+
+## Withdrawal Flow
+
+### Creator Side (App)
+
+1. Creator views their balance on the dashboard (₱ amount)
+2. Taps "Withdraw" → opens withdrawal screen
+3. Selects payout method (GCash / Maya / Bank Transfer)
+   - If saved methods exist, picks from list
+   - Otherwise, enters account name + number, optionally saves it
+4. Enters withdrawal amount (min ₱100, max = current balance)
+5. Confirms → creates a `withdrawals` record with `status: "pending"`
+6. Creator's `balance` is reduced immediately (optimistic)
+7. Creator sees withdrawal in "Transaction History" with status badge
+
+### Admin Side
+
+1. Admin views pending withdrawals queue (filtered by `status: "pending"`)
+2. Reviews withdrawal details (amount, method, account)
+3. Processes payment externally (GCash app, Maya, bank portal)
+4. Marks withdrawal as `"processing"` → then `"completed"` with `transactionRef`
+5. If payment fails: marks as `"failed"`, restores creator's `balance`
+
+```
+pending → processing → completed
+                    ↘ failed (balance restored)
+```
+
+---
+
+## Backend Functions (Planned)
+
+### Mutations
+
+| Function | Description |
+|---|---|
+| `earnings.getByCreator(creatorId)` | All earning records for a creator |
+| `withdrawals.create(creatorId, amount, payoutMethod, accountDetails)` | Request a new withdrawal |
+| `withdrawals.updateStatus(id, status, transactionRef?)` | Admin updates withdrawal status |
+| `payoutMethods.save(creatorId, type, accountName, accountNumber, isDefault)` | Save a payout method |
+| `payoutMethods.delete(id)` | Remove a saved payout method |
+| `payoutMethods.setDefault(id)` | Set a method as default |
+
+### Queries
+
+| Function | Description |
+|---|---|
+| `earnings.getByCreator(creatorId)` | All earnings for a creator (for transaction history) |
+| `withdrawals.getByCreator(creatorId)` | All withdrawals for a creator |
+| `withdrawals.getByStatus(status)` | Admin queue (pending, processing) |
+| `payoutMethods.getByCreator(creatorId)` | Saved payout methods |
+
+---
+
+## Analytics Integration
+
+Earnings are tracked in the `analytics` table:
+- `earningsTotal` field on creator analytics (daily + monthly)
+- When `admin.markPaid` is called and `creatorPayout` exists, `incrementStat` is called with `field: "earningsTotal"` and `delta: creatorPayout`
+
+---
+
+## Mobile App Screens (Planned)
+
+### Balance Card (Dashboard)
+- Shows current `balance` formatted as `₱X,XXX.00`
+- "Withdraw" button (disabled if balance < ₱100)
+- "View History" link to transaction history
+
+### Transaction History Screen
+- Two tabs: "Earnings" and "Withdrawals"
+- Earnings tab: list of earning events with type icon, amount, date
+- Withdrawals tab: list of withdrawal requests with status badge, amount, method
+- Filter by date range
+
+### Withdrawal Screen
+1. Amount input with balance display
+2. Payout method selector (saved methods + "Add new")
+3. Account details (pre-filled if saved method selected)
+4. Confirmation modal with summary
+5. Loading state while mutation runs
+6. Success screen with withdrawal reference
+
+### Payout Methods Screen
+- List of saved payout methods
+- Default method highlighted
+- Add / Edit / Delete methods
+- Set default toggle
+
+---
+
+## Security Considerations
+
+- **Balance validation:** Withdrawal mutations must verify `amount <= creator.balance` server-side
+- **Race conditions:** Use Convex's transactional guarantees — balance check + deduction in a single mutation
+- **Account details:** Stored as plain strings (not encrypted) — acceptable for PH payment channel numbers
+- **Admin-only status changes:** Withdrawal status updates should only be callable by admin-authenticated users
+- **Minimum withdrawal:** Enforce ₱100 minimum both client-side and server-side
