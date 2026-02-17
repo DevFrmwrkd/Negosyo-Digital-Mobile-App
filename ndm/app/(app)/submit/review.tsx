@@ -16,6 +16,7 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Video, ResizeMode } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Id } from '../../../convex/_generated/dataModel';
@@ -31,6 +32,7 @@ export default function SubmitReviewScreen() {
     user ? { clerkId: user.id } : 'skip'
   );
 
+  const insets = useSafeAreaInsets();
   const submitSubmission = useMutation(api.submissions.submit);
 
   const [submissionId, setSubmissionId] = useState<string | null>(null);
@@ -358,7 +360,7 @@ export default function SubmitReviewScreen() {
                   ref={videoRef}
                   source={{ uri: videoUrl }}
                   style={{ width: '100%', height: '100%' }}
-                  resizeMode={ResizeMode.COVER}
+                  resizeMode={ResizeMode.CONTAIN}
                   shouldPlay={false}
                   isMuted={true}
                   isLooping={false}
@@ -502,7 +504,7 @@ export default function SubmitReviewScreen() {
       </ScrollView>
 
       {/* Submit Button */}
-      <View className="px-4 py-4 bg-white border-t border-zinc-100">
+      <View className="px-4 pt-4 bg-white border-t border-zinc-100" style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
         <TouchableOpacity
           className={`h-14 rounded-xl items-center justify-center flex-row ${
             loading || !canSubmit ? 'bg-zinc-300' : 'bg-emerald-500'

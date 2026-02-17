@@ -14,6 +14,7 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Id } from '../../../convex/_generated/dataModel';
@@ -27,6 +28,7 @@ export default function SubmitPhotosScreen() {
     user ? { clerkId: user.id } : 'skip'
   );
 
+  const insets = useSafeAreaInsets();
   const generateR2UploadUrl = useMutation(api.r2.generateUploadUrl);
   const updateSubmission = useMutation(api.submissions.update);
 
@@ -37,15 +39,20 @@ export default function SubmitPhotosScreen() {
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
   const [hasExistingPhotos, setHasExistingPhotos] = useState(false);
   const [wantsToAddMore, setWantsToAddMore] = useState(false);
+  const [removedExistingPhotos, setRemovedExistingPhotos] = useState<Set<string>>(new Set());
 
   const submission = useQuery(
     api.submissions.getById,
     submissionId ? { id: submissionId as Id<'submissions'> } : 'skip'
   );
 
+  // Existing photos minus any the user removed
+  const activeExistingPhotos = existingPhotos.filter(p => !removedExistingPhotos.has(p));
+  const hasChanges = photos.length > 0 || removedExistingPhotos.size > 0;
+
   const photoUrls = useQuery(
     api.files.getMultipleUrls,
-    existingPhotos.length > 0 ? { storageIds: existingPhotos } : 'skip'
+    activeExistingPhotos.length > 0 ? { storageIds: activeExistingPhotos } : 'skip'
   );
 
   // Load submission ID from storage
@@ -87,8 +94,8 @@ export default function SubmitPhotosScreen() {
     const hasPermission = await requestPermission();
     if (!hasPermission) return;
 
-    const totalCount = photos.length + existingPhotos.length;
-    const remaining = 10 - totalCount;
+    const currentTotal = photos.length + activeExistingPhotos.length;
+    const remaining = 10 - currentTotal;
 
     if (remaining <= 0) {
       setError('You can only have a maximum of 10 photos total.');
@@ -121,19 +128,43 @@ export default function SubmitPhotosScreen() {
     setPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const removeExistingPhoto = (r2Key: string) => {
+    setRemovedExistingPhotos(prev => new Set([...prev, r2Key]));
+  };
+
   const handleNext = async () => {
     if (!submissionId) return;
 
-    const totalPhotos = photos.length + existingPhotos.length;
+    const totalPhotos = photos.length + activeExistingPhotos.length;
 
-    // If user has existing photos and hasn't added new ones, just proceed
-    if (hasExistingPhotos && !wantsToAddMore && photos.length === 0) {
+    // No changes made — just navigate, no re-upload
+    if (hasExistingPhotos && !hasChanges) {
       router.push('/(app)/submit/interview');
       return;
     }
 
     if (totalPhotos < 3) {
       setError('Please upload at least 3 photos.');
+      return;
+    }
+
+    // Only removals, no new photos — update the submission with remaining existing photos
+    if (photos.length === 0 && removedExistingPhotos.size > 0) {
+      setLoading(true);
+      setError(null);
+      try {
+        await updateSubmission({
+          id: submissionId as Id<'submissions'>,
+          photos: activeExistingPhotos,
+        });
+        setRemovedExistingPhotos(new Set());
+        router.push('/(app)/submit/interview');
+      } catch (err: any) {
+        console.error('Error updating photos:', err);
+        setError(err.message || 'Failed to update photos');
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
@@ -149,7 +180,7 @@ export default function SubmitPhotosScreen() {
     try {
       const uploadedKeys: string[] = [];
 
-      // Upload each new photo to R2
+      // Upload only NEW photos to R2
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
         if (!photo.uploaded) {
@@ -179,13 +210,17 @@ export default function SubmitPhotosScreen() {
         }
       }
 
-      // Combine existing + new photos (R2 file keys)
-      const finalPhotoList = [...existingPhotos, ...uploadedKeys];
+      // Combine remaining existing + newly uploaded photos
+      const finalPhotoList = [...activeExistingPhotos, ...uploadedKeys];
 
       await updateSubmission({
         id: submissionId as Id<'submissions'>,
         photos: finalPhotoList,
       });
+
+      // Clear local state so photos aren't treated as "new" if user navigates back
+      setPhotos([]);
+      setRemovedExistingPhotos(new Set());
 
       router.push('/(app)/submit/interview');
     } catch (err: any) {
@@ -204,7 +239,7 @@ export default function SubmitPhotosScreen() {
     );
   }
 
-  const totalCount = photos.length + existingPhotos.length;
+  const totalCount = photos.length + activeExistingPhotos.length;
 
   return (
     <SafeAreaView className="flex-1 bg-zinc-50">
@@ -251,13 +286,13 @@ export default function SubmitPhotosScreen() {
                 Photos Already Uploaded
               </Text>
               <Text className="text-emerald-600 text-center mb-4">
-                You have {existingPhotos.length} photo{existingPhotos.length !== 1 ? 's' : ''} saved. You can proceed to the next step or add more photos.
+                You have {activeExistingPhotos.length} photo{activeExistingPhotos.length !== 1 ? 's' : ''} saved. You can proceed to the next step or add more photos.
               </Text>
 
               {/* Photo Preview Grid */}
               {photoUrls && photoUrls.length > 0 && (
                 <View className="flex-row flex-wrap justify-center mb-4">
-                  {photoUrls.slice(0, 6).map((url, index) => (
+                  {photoUrls.map((url, index) => (
                     <View key={`preview-${index}`} className="w-16 h-16 m-1 rounded-lg overflow-hidden">
                       {url && !url.startsWith('convex:') ? (
                         <Image source={{ uri: url }} className="w-full h-full" resizeMode="cover" />
@@ -268,11 +303,6 @@ export default function SubmitPhotosScreen() {
                       )}
                     </View>
                   ))}
-                  {existingPhotos.length > 6 && (
-                    <View className="w-16 h-16 m-1 rounded-lg bg-zinc-200 items-center justify-center">
-                      <Text className="text-zinc-500 font-bold">+{existingPhotos.length - 6}</Text>
-                    </View>
-                  )}
                 </View>
               )}
 
@@ -315,6 +345,12 @@ export default function SubmitPhotosScreen() {
                         <ActivityIndicator size="small" color="#a1a1aa" />
                       </View>
                     )}
+                    <TouchableOpacity
+                      className="absolute top-1 right-1 w-6 h-6 bg-black/50 rounded-full items-center justify-center"
+                      onPress={() => removeExistingPhoto(activeExistingPhotos[index])}
+                    >
+                      <Ionicons name="close" size={14} color="white" />
+                    </TouchableOpacity>
                     <View className="absolute bottom-1 right-1 bg-emerald-500 rounded px-2 py-0.5">
                       <Text className="text-white text-xs font-medium">Saved</Text>
                     </View>
@@ -353,7 +389,7 @@ export default function SubmitPhotosScreen() {
       </ScrollView>
 
       {/* Next Button */}
-      <View className="px-4 py-4 bg-white border-t border-zinc-100">
+      <View className="px-4 pt-4 bg-white border-t border-zinc-100" style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
         <TouchableOpacity
           className={`h-14 rounded-xl items-center justify-center flex-row ${
             loading || totalCount < 3 ? 'bg-zinc-300' : 'bg-emerald-500'
@@ -371,10 +407,12 @@ export default function SubmitPhotosScreen() {
           ) : (
             <>
               <Text className="text-white font-semibold text-base">
-                {hasExistingPhotos && !wantsToAddMore && photos.length === 0
-                  ? 'Continue to Interview'
-                  : photos.length > 0
-                    ? `Upload ${photos.length} Photo${photos.length !== 1 ? 's' : ''} & Continue`
+                {hasExistingPhotos && !hasChanges
+                  ? 'Next: Upload Interview'
+                  : hasChanges
+                    ? photos.length > 0
+                      ? `Upload ${photos.length} Photo${photos.length !== 1 ? 's' : ''} & Continue`
+                      : 'Save Changes & Continue'
                     : 'Next: Upload Interview'}
               </Text>
               <Ionicons name="arrow-forward" size={20} color="white" style={{ marginLeft: 8 }} />

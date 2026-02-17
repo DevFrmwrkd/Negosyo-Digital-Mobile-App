@@ -15,6 +15,7 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const BUSINESS_TYPES = [
@@ -42,6 +43,7 @@ export default function SubmitInfoScreen() {
     creator?._id ? { creatorId: creator._id } : 'skip'
   );
 
+  const insets = useSafeAreaInsets();
   const createSubmission = useMutation(api.submissions.create);
   const updateSubmission = useMutation(api.submissions.update);
 
@@ -318,7 +320,7 @@ export default function SubmitInfoScreen() {
       </KeyboardAvoidingView>
 
       {/* Next Button */}
-      <View className="px-4 py-4 bg-white border-t border-zinc-100">
+      <View className="px-4 pt-4 bg-white border-t border-zinc-100" style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
         <TouchableOpacity
           className={`h-14 rounded-xl items-center justify-center flex-row ${
             loading ? 'bg-emerald-400' : 'bg-emerald-500'

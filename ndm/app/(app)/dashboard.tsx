@@ -102,6 +102,7 @@ export default function DashboardScreen() {
     if (sub.status === 'approved') return { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Verified' };
     if (sub.status === 'rejected') return { bg: 'bg-red-100', text: 'text-red-700', label: 'Rejected' };
     if (isDraft) return { bg: 'bg-zinc-100', text: 'text-zinc-600', label: 'Draft' };
+    if (sub.status === 'submitted') return { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Submitted' };
     return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Pending' };
   };
 

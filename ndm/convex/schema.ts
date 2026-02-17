@@ -15,7 +15,9 @@ export default defineSchema({
     role: v.optional(v.string()),
     status: v.optional(v.string()),
     totalEarnings: v.optional(v.number()),
-  }).index("by_clerk_id", ["clerkId"]),
+  }).index("by_clerk_id", ["clerkId"])
+    .index("by_email", ["email"])
+    .index("by_referral_code", ["referralCode"]),
 
   submissions: defineTable({
     creatorId: v.id("creators"),
@@ -38,12 +40,14 @@ export default defineSchema({
     status: v.string(), // draft, pending, approved, rejected, website_generated, deployed, paid, in_review
     creatorPayout: v.optional(v.number()),
     amount: v.optional(v.number()),
-    // Airtable integration fields
     airtableRecordId: v.optional(v.string()), // Airtable record ID (starts with "rec")
     airtableSyncStatus: v.optional(v.string()), // pending_push, pushed, content_received, synced, error
   }).index("by_creator_id", ["creatorId"])
     .index("by_status", ["status"])
     .index("by_airtable_sync", ["airtableSyncStatus"]),
+    .index("by_creator_status", ["creatorId", "status"])
+    .index("by_city", ["city"]),
+
 
   generatedWebsites: defineTable({
     submissionId: v.id("submissions"),
@@ -60,7 +64,9 @@ export default defineSchema({
     publishedAt: v.optional(v.number()),
     customizations: v.optional(v.any()),
     extractedContent: v.optional(v.any()),
-  }).index("by_submission_id", ["submissionId"]),
+    cfPagesProjectName: v.optional(v.string()),
+  }).index("by_submission_id", ["submissionId"])
+    .index("by_status", ["status"]),
 
   websiteContent: defineTable({
     submissionId: v.optional(v.id("submissions")),
@@ -108,6 +114,7 @@ export default defineSchema({
     // Services and other content
     services: v.optional(v.any()),
     images: v.optional(v.any()),
+    enhancedImages: v.optional(v.any()),
     contact: v.optional(v.any()),
     contactInfo: v.optional(v.any()),
     customizations: v.optional(v.any()),
