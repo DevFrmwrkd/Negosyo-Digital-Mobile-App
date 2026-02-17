@@ -495,8 +495,8 @@ export const fetchEnhancedContentWithRetry = internalAction({
 
       console.log(`[Airtable Fetch] Successfully stored ${Object.keys(enhancedImages).length} images`);
 
-      // Save to websiteContent table (not submissions)
-      // Mapping: Airtable field → Convex websiteContent field
+      // Save to generatedWebsites table
+      // Mapping: Airtable field → Convex generatedWebsites field
       // hero_headline → heroHeadline
       // hero_subheadline → heroSubHeadline
       // about_content → aboutDescription
@@ -535,7 +535,7 @@ export const fetchEnhancedContentWithRetry = internalAction({
         }
       );
 
-      console.log(`[Airtable Fetch] Complete! Saved to websiteContent and updated Airtable status to done`);
+      console.log(`[Airtable Fetch] Complete! Saved to generatedWebsites and updated Airtable status to done`);
 
       return {
         success: true,
@@ -698,7 +698,7 @@ export const saveAllEnhancedImages = internalMutation({
       throw new Error("Submission not found");
     }
 
-    // Just update sync status - images now go to websiteContent
+    // Just update sync status - images now go to generatedWebsites
     await ctx.db.patch(args.submissionId, {
       airtableSyncStatus: "synced",
     });
@@ -707,7 +707,7 @@ export const saveAllEnhancedImages = internalMutation({
   },
 });
 
-// NEW: Save enhanced content (images + AI text) to websiteContent table
+// Save enhanced content (images + AI text) to generatedWebsites table
 export const saveEnhancedContent = internalMutation({
   args: {
     submissionId: v.id("submissions"),
@@ -733,12 +733,6 @@ export const saveEnhancedContent = internalMutation({
       throw new Error("Submission not found");
     }
 
-    // Check if websiteContent already exists for this submission
-    const existingContent = await ctx.db
-      .query("websiteContent")
-      .withIndex("by_submission_id", (q) => q.eq("submissionId", args.submissionId))
-      .first();
-
     // Build the enhancedImages object for storage (converting string IDs to proper storage IDs)
     const enhancedImagesForDb: Record<string, { url?: string; storageId?: any }> = {};
 
@@ -746,41 +740,39 @@ export const saveEnhancedContent = internalMutation({
       if (value) {
         enhancedImagesForDb[key] = {
           url: value.url,
-          storageId: value.storageId as any, // Cast to storage ID type
+          storageId: value.storageId as any,
         };
       }
     }
 
-    // Mapping from Airtable AI fields to websiteContent fields:
-    // hero_headline → heroHeadline
-    // hero_subheadline → heroSubHeadline
-    // about_content → aboutDescription
-    // services_description → servicesDescription
-    // contact_cta → contactCta
-    const contentData = {
-      submissionId: args.submissionId,
+    // Content fields to save
+    const contentFields = {
       businessName: submission.businessName,
-      // AI-generated text fields (mapped to websiteContent schema)
       heroHeadline: args.aiTextFields.heroHeadline,
       heroSubHeadline: args.aiTextFields.heroSubHeadline,
       aboutDescription: args.aiTextFields.aboutDescription,
       servicesDescription: args.aiTextFields.servicesDescription,
       contactCta: args.aiTextFields.contactCta,
-      // Structured enhanced images with field names preserved
       enhancedImages: enhancedImagesForDb as any,
-      // Sync tracking
       airtableSyncedAt: Date.now(),
       updatedAt: Date.now(),
     };
 
-    if (existingContent) {
-      // Update existing record
-      await ctx.db.patch(existingContent._id, contentData);
-      console.log(`[Airtable] Updated websiteContent for ${args.submissionId}`);
+    // Check if generatedWebsites record already exists for this submission
+    const existingWebsite = await ctx.db
+      .query("generatedWebsites")
+      .withIndex("by_submission_id", (q) => q.eq("submissionId", args.submissionId))
+      .first();
+
+    if (existingWebsite) {
+      await ctx.db.patch(existingWebsite._id, contentFields);
+      console.log(`[Airtable] Updated generatedWebsites content for ${args.submissionId}`);
     } else {
-      // Create new record
-      await ctx.db.insert("websiteContent", contentData);
-      console.log(`[Airtable] Created websiteContent for ${args.submissionId}`);
+      await ctx.db.insert("generatedWebsites", {
+        submissionId: args.submissionId,
+        ...contentFields,
+      });
+      console.log(`[Airtable] Created generatedWebsites with content for ${args.submissionId}`);
     }
 
     console.log(`[Airtable] Saved enhanced content with ${Object.keys(args.enhancedImages).length} images and ${Object.keys(args.aiTextFields).filter(k => args.aiTextFields[k as keyof typeof args.aiTextFields]).length} text fields`);
@@ -852,41 +844,41 @@ export const getSyncStatus = query({
     const submission = await ctx.db.get(args.submissionId);
     if (!submission) return null;
 
-    // Also get websiteContent if it exists
-    const websiteContent = await ctx.db
-      .query("websiteContent")
+    // Check generatedWebsites for content
+    const website = await ctx.db
+      .query("generatedWebsites")
       .withIndex("by_submission_id", (q) => q.eq("submissionId", args.submissionId))
       .first();
 
     return {
       airtableRecordId: submission.airtableRecordId || null,
       syncStatus: submission.airtableSyncStatus || null,
-      hasWebsiteContent: !!websiteContent,
-      websiteContentId: websiteContent?._id || null,
-      airtableSyncedAt: websiteContent?.airtableSyncedAt || null,
+      hasWebsiteContent: !!(website?.enhancedImages || website?.heroHeadline),
+      websiteId: website?._id || null,
+      airtableSyncedAt: website?.airtableSyncedAt || null,
     };
   },
 });
 
-// Get enhanced content from websiteContent table
+// Get enhanced content from generatedWebsites table
 export const getEnhancedContent = query({
   args: { submissionId: v.id("submissions") },
   handler: async (ctx, args) => {
-    const websiteContent = await ctx.db
-      .query("websiteContent")
+    const website = await ctx.db
+      .query("generatedWebsites")
       .withIndex("by_submission_id", (q) => q.eq("submissionId", args.submissionId))
       .first();
 
-    if (!websiteContent) return null;
+    if (!website) return null;
 
     return {
-      enhancedImages: websiteContent.enhancedImages || null,
-      heroHeadline: websiteContent.heroHeadline || null,
-      heroSubHeadline: websiteContent.heroSubHeadline || null,
-      aboutDescription: websiteContent.aboutDescription || null,
-      servicesDescription: websiteContent.servicesDescription || null,
-      contactCta: websiteContent.contactCta || null,
-      airtableSyncedAt: websiteContent.airtableSyncedAt || null,
+      enhancedImages: website.enhancedImages || null,
+      heroHeadline: website.heroHeadline || null,
+      heroSubHeadline: website.heroSubHeadline || null,
+      aboutDescription: website.aboutDescription || null,
+      servicesDescription: website.servicesDescription || null,
+      contactCta: website.contactCta || null,
+      airtableSyncedAt: website.airtableSyncedAt || null,
     };
   },
 });
