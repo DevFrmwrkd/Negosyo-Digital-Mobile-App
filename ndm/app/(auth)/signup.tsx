@@ -39,6 +39,7 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [referredByCode, setReferredByCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
@@ -129,6 +130,7 @@ export default function SignupScreen() {
           lastName: lastName.trim(),
           phone: phone.trim() || undefined,
           referralCode,
+          referredByCode: referredByCode.trim() || undefined,
         });
 
         await setActive({ session: result.createdSessionId });
@@ -371,7 +373,7 @@ export default function SignupScreen() {
               </View>
 
               {/* Confirm Password Input */}
-              <View className="mb-6">
+              <View className="mb-4">
                 <Text className="text-zinc-700 font-medium mb-2">Confirm Password</Text>
                 <View className="flex-row items-center bg-zinc-50 border border-zinc-200 rounded-xl px-4 h-14">
                   <Ionicons name="lock-closed-outline" size={20} color="#71717a" />
@@ -382,6 +384,27 @@ export default function SignupScreen() {
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     secureTextEntry={!showPassword}
+                    editable={!loading}
+                  />
+                </View>
+              </View>
+
+              {/* Referral Code Input */}
+              <View className="mb-6">
+                <View className="flex-row justify-between items-center mb-2">
+                  <Text className="text-zinc-700 font-medium">Referral Code</Text>
+                  <Text className="text-xs text-zinc-400">Optional</Text>
+                </View>
+                <View className="flex-row items-center bg-zinc-50 border border-zinc-200 rounded-xl px-4 h-14">
+                  <Ionicons name="gift-outline" size={20} color="#71717a" />
+                  <TextInput
+                    className="flex-1 ml-3 text-base text-zinc-900"
+                    placeholder="Enter referral code"
+                    placeholderTextColor="#a1a1aa"
+                    value={referredByCode}
+                    onChangeText={(text) => setReferredByCode(text.toUpperCase())}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
                     editable={!loading}
                   />
                 </View>

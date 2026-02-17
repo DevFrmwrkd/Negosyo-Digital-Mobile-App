@@ -66,6 +66,13 @@
         {
           "microphonePermission": "The app accesses your microphone to record business interviews."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#10b981"
+        }
       ]
     ],
     "experiments": {
