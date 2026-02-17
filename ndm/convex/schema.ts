@@ -10,25 +10,39 @@ export default defineSchema({
     lastName: v.optional(v.string()),
     phone: v.optional(v.string()),
     balance: v.optional(v.number()),
+    totalEarnings: v.optional(v.number()),
+    totalWithdrawn: v.optional(v.number()),
+    submissionCount: v.optional(v.number()),
+    level: v.optional(v.number()), // Gamification level (1 = starter, 2 = active, 3 = pro, etc.)
     createdAt: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
+    lastActiveAt: v.optional(v.number()),
     referralCode: v.optional(v.string()),
     referredByCode: v.optional(v.string()), // Referral code used during signup
     role: v.optional(v.string()),
     status: v.optional(v.string()),
-    totalEarnings: v.optional(v.number()),
   }).index("by_clerk_id", ["clerkId"])
     .index("by_email", ["email"])
-    .index("by_referral_code", ["referralCode"]),
+    .index("by_referral_code", ["referralCode"])
+    .index("by_status", ["status"]),
 
   submissions: defineTable({
     creatorId: v.id("creators"),
     businessName: v.string(),
     businessType: v.string(),
+    businessDescription: v.optional(v.string()), // AI-generated from transcript
     ownerName: v.string(),
     ownerPhone: v.string(),
     ownerEmail: v.optional(v.string()),
     address: v.string(),
     city: v.string(),
+    province: v.optional(v.string()),
+    barangay: v.optional(v.string()),
+    postalCode: v.optional(v.string()),
+    coordinates: v.optional(v.object({ // GPS location of the business
+      lat: v.number(),
+      lng: v.number(),
+    })),
     photos: v.optional(v.array(v.string())),
     hasProducts: v.optional(v.boolean()), // Whether this business has products (affects expected photo count)
     videoStorageId: v.optional(v.string()),
@@ -38,10 +52,14 @@ export default defineSchema({
     transcript: v.optional(v.string()),
     transcriptionStatus: v.optional(v.string()), // processing, complete, failed, skipped
     transcriptionError: v.optional(v.string()),
+    aiGeneratedContent: v.optional(v.any()), // AI-extracted content from transcript (services, USPs, etc.)
     status: v.string(), // draft, submitted, approved, rejected, website_generated, deployed, paid, in_review
     rejectionReason: v.optional(v.string()),
+    reviewedBy: v.optional(v.string()), // Admin Clerk ID who reviewed
+    reviewedAt: v.optional(v.number()), // When the review happened
     websiteUrl: v.optional(v.string()),
     creatorPayout: v.optional(v.number()),
+    platformFee: v.optional(v.number()), // Platform fee charged to business owner
     amount: v.optional(v.number()),
     airtableRecordId: v.optional(v.string()), // Airtable record ID (starts with "rec")
     airtableSyncStatus: v.optional(v.string()), // pending_push, pushed, content_received, synced, error
@@ -146,6 +164,9 @@ export default defineSchema({
         storageId: v.optional(v.id("_storage")),
       })),
     })),
+    // Domain settings
+    subdomain: v.optional(v.string()), // e.g., "juans-bakery" → juans-bakery.negosyo.digital
+    customDomain: v.optional(v.string()), // e.g., "www.juansbakery.com"
     // Airtable sync tracking
     airtableSyncedAt: v.optional(v.number()),
   }).index("by_submission_id", ["submissionId"])
@@ -374,4 +395,12 @@ export default defineSchema({
     .index("by_target", ["targetType", "targetId"])
     .index("by_action", ["action"])
     .index("by_timestamp", ["timestamp"]),
+
+  settings: defineTable({
+    key: v.string(), // Unique setting key (e.g., "referral_bonus_amount", "min_withdrawal", "platform_fee_percent")
+    value: v.any(), // Setting value (number, string, boolean, object)
+    description: v.optional(v.string()), // Human-readable description
+    updatedAt: v.number(),
+    updatedBy: v.optional(v.string()), // Admin Clerk ID who last updated
+  }).index("by_key", ["key"]),
 });

@@ -435,3 +435,134 @@ Added analytics tables for tracking creator performance and website engagement m
 **Remaining integration:**
 - Integrate Cloudflare Analytics API or Plausible for website traffic data
 - Website click tracking via event listeners on deployed websites → API endpoint → `upsertWebsiteStats`
+
+---
+
+## Phase 4 — Schema Completeness & Backend CRUD
+
+### [Schema] Enhanced creators table fields
+
+Added missing fields for gamification, withdrawal tracking, and activity timestamps:
+- `totalWithdrawn: v.optional(v.number())` — lifetime total withdrawn
+- `submissionCount: v.optional(v.number())` — total submissions created (incremented on `submissions.create`)
+- `level: v.optional(v.number())` — gamification level (1 = starter, 2 = active, 3 = pro, etc.)
+- `updatedAt: v.optional(v.number())` — last profile update timestamp
+- `lastActiveAt: v.optional(v.number())` — last activity timestamp (set on submission create)
+- Added `by_status` index on `status` field
+
+### [Schema] Enhanced submissions table fields
+
+Added missing fields for richer business data, admin review tracking, and AI content:
+- `businessDescription: v.optional(v.string())` — AI-generated description from transcript
+- `province: v.optional(v.string())` — province (Philippine address)
+- `barangay: v.optional(v.string())` — barangay (Philippine address)
+- `postalCode: v.optional(v.string())` — postal code
+- `coordinates: v.optional(v.object({ lat, lng }))` — GPS location of the business
+- `aiGeneratedContent: v.optional(v.any())` — AI-extracted content from transcript (services, USPs, etc.)
+- `reviewedBy: v.optional(v.string())` — Admin Clerk ID who approved/rejected
+- `reviewedAt: v.optional(v.number())` — Timestamp of the review
+- `platformFee: v.optional(v.number())` — Platform fee charged to business owner
+
+### [Schema] Enhanced generatedWebsites table fields
+
+Added domain customization fields:
+- `subdomain: v.optional(v.string())` — e.g., `juans-bakery` for `juans-bakery.negosyo.digital`
+- `customDomain: v.optional(v.string())` — e.g., `www.juansbakery.com`
+
+### [Schema + Backend] Settings table — P3
+
+Added `settings` table for platform-wide configurable values.
+
+**`convex/schema.ts`** — Added `settings` table:
+- `key: v.string()` — unique setting key (e.g., `"referral_bonus_amount"`, `"min_withdrawal"`, `"platform_fee_percent"`)
+- `value: v.any()` — setting value (number, string, boolean, object)
+- `description: v.optional(v.string())` — human-readable description
+- `updatedAt: v.number()` — last update timestamp
+- `updatedBy: v.optional(v.string())` — admin Clerk ID who last updated
+- Index: `by_key`
+
+**`convex/settings.ts`** — New file with settings CRUD:
+- `get(key)` — Get a single setting by key (returns value or null)
+- `getAll()` — Get all settings as a key-value map
+- `set(key, value, description?, adminId?)` — Upsert a setting
+- `remove(key)` — Delete a setting
+
+### [Backend] Leads & Lead Notes CRUD — P0
+
+**`convex/leads.ts`** — New file with full leads backend:
+
+*Mutations:*
+- `create(submissionId, creatorId, source, name, phone, email?, message?)` — Creates a lead, increments `leadsGenerated` analytics (daily + monthly), and sends `new_lead` notification to creator
+- `updateStatus(id, status)` — Move lead through pipeline (new → contacted → qualified → converted / lost)
+- `remove(id)` — Delete lead and all associated notes
+
+*Queries:*
+- `getBySubmission(submissionId)` — All leads for a business website
+- `getByCreator(creatorId)` — All leads across all of a creator's businesses
+- `getByStatus(status)` — Filter leads by pipeline stage
+- `getCountBySubmission(submissionId)` — Lead count breakdown by status (for dashboard widgets)
+
+**`convex/leadNotes.ts`** — New file:
+- `create(leadId, creatorId, content)` — Add a follow-up note
+- `getByLead(leadId)` — All notes for a lead (newest first)
+- `remove(id)` — Delete a note
+
+### [Backend] Earnings CRUD — P0
+
+**`convex/earnings.ts`** — New file with earning record management:
+
+*Internal mutations:*
+- `create(creatorId, submissionId, amount, type, status?)` — Create an earning record. Called by `admin.markPaid` and `referrals.qualifyByCreator`. Defaults to `status: "available"`.
+- `markWithdrawn(earningIds)` — Batch mark earnings as withdrawn (for withdrawal flow)
+
+*Queries:*
+- `getByCreator(creatorId)` — All earnings with business names (for transaction history)
+- `getBySubmission(submissionId)` — Earnings tied to a specific submission
+- `getSummary(creatorId)` — Aggregated earnings: total, available, pending, withdrawn, and breakdown by type (submissions/referrals/leads)
+
+**Wiring:** `admin.markPaid` now calls `internal.earnings.create` with `type: "submission_approved"` when a payout is credited. It also updates `totalEarnings` on the creator record.
+
+### [Backend] Withdrawals CRUD — P0
+
+**`convex/withdrawals.ts`** — New file with full withdrawal flow:
+
+*Mutations:*
+- `create(creatorId, amount, payoutMethod, accountDetails)` — Request a withdrawal. Validates ₱100 minimum and sufficient balance. Deducts balance immediately (optimistic).
+- `updateStatus(id, status, transactionRef?, adminId)` — Admin updates withdrawal status:
+  - `"processing"` → marks as being processed
+  - `"completed"` → sets `processedAt`, increments `totalWithdrawn` on creator, sends notification
+  - `"failed"` → restores creator's balance
+  - Creates audit log for all status changes
+
+*Queries:*
+- `getByCreator(creatorId)` — All withdrawals for a creator
+- `getByStatus(status)` — Admin withdrawal queue (enriched with creator name/email)
+- `getAll()` — All withdrawals with creator names
+
+### [Backend] Payout Methods CRUD — P0
+
+**`convex/payoutMethods.ts`** — New file with saved payment methods:
+
+*Mutations:*
+- `save(creatorId, type, accountName, accountNumber, isDefault?)` — Save a new payout method. First method auto-sets as default. Setting `isDefault` unsets previous default.
+- `update(id, accountName?, accountNumber?)` — Update account details
+- `setDefault(id)` — Set a method as the default
+- `remove(id)` — Delete a method. If default is deleted, next available method becomes default.
+
+*Queries:*
+- `getByCreator(creatorId)` — All saved methods for a creator
+- `getDefault(creatorId)` — The default payout method (or null)
+
+### [Backend] Admin review tracking
+
+Updated `convex/admin.ts`:
+- `approveSubmission` now sets `reviewedBy: adminId` and `reviewedAt: Date.now()` on the submission
+- `rejectSubmission` now sets `reviewedBy: adminId` and `reviewedAt: Date.now()` on the submission
+- `markPaid` now creates an earning record via `internal.earnings.create` and updates `totalEarnings` on the creator
+
+### [Backend] Submissions enhancements
+
+Updated `convex/submissions.ts`:
+- `create` mutation now accepts `province`, `barangay`, `postalCode`, `coordinates` optional fields
+- `create` now increments `submissionCount` on the creator and sets `lastActiveAt`
+- `update` mutation now accepts `businessDescription`, `province`, `barangay`, `postalCode`, `coordinates`, `platformFee`

@@ -13,6 +13,13 @@ export const create = mutation({
     ownerEmail: v.optional(v.string()),
     address: v.string(),
     city: v.string(),
+    province: v.optional(v.string()),
+    barangay: v.optional(v.string()),
+    postalCode: v.optional(v.string()),
+    coordinates: v.optional(v.object({
+      lat: v.number(),
+      lng: v.number(),
+    })),
   },
   handler: async (ctx, args) => {
     const submissionId = await ctx.db.insert("submissions", {
@@ -20,6 +27,16 @@ export const create = mutation({
       status: "draft",
       photos: [],
     });
+
+    // Increment creator's submissionCount
+    const creator = await ctx.db.get(args.creatorId);
+    if (creator) {
+      await ctx.db.patch(args.creatorId, {
+        submissionCount: (creator.submissionCount || 0) + 1,
+        lastActiveAt: Date.now(),
+      });
+    }
+
     return submissionId;
   },
 });
@@ -72,16 +89,25 @@ export const update = mutation({
     id: v.id("submissions"),
     businessName: v.optional(v.string()),
     businessType: v.optional(v.string()),
+    businessDescription: v.optional(v.string()),
     ownerName: v.optional(v.string()),
     ownerPhone: v.optional(v.string()),
     ownerEmail: v.optional(v.string()),
     address: v.optional(v.string()),
     city: v.optional(v.string()),
+    province: v.optional(v.string()),
+    barangay: v.optional(v.string()),
+    postalCode: v.optional(v.string()),
+    coordinates: v.optional(v.object({
+      lat: v.number(),
+      lng: v.number(),
+    })),
     photos: v.optional(v.array(v.string())),
     hasProducts: v.optional(v.boolean()), // Whether this business sells products (affects expected photo count)
     videoStorageId: v.optional(v.string()),
     audioStorageId: v.optional(v.string()),
     creatorPayout: v.optional(v.number()),
+    platformFee: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;
