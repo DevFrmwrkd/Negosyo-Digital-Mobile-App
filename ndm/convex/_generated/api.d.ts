@@ -9,9 +9,11 @@
  */
 
 import type * as admin from "../admin.js";
+import type * as airtable from "../airtable.js";
 import type * as creators from "../creators.js";
 import type * as files from "../files.js";
 import type * as generatedWebsites from "../generatedWebsites.js";
+import type * as http from "../http.js";
 import type * as r2 from "../r2.js";
 import type * as storage from "../storage.js";
 import type * as submissions from "../submissions.js";
@@ -25,9 +27,11 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  airtable: typeof airtable;
   creators: typeof creators;
   files: typeof files;
   generatedWebsites: typeof generatedWebsites;
+  http: typeof http;
   r2: typeof r2;
   storage: typeof storage;
   submissions: typeof submissions;
