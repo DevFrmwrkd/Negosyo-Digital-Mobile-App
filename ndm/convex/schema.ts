@@ -61,6 +61,7 @@ export default defineSchema({
     publishedAt: v.optional(v.number()),
     customizations: v.optional(v.any()),
     extractedContent: v.optional(v.any()),
+    cfPagesProjectName: v.optional(v.string()),
   }).index("by_submission_id", ["submissionId"])
     .index("by_status", ["status"]),
 
