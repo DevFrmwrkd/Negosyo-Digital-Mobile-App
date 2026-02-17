@@ -51,6 +51,7 @@ export default defineSchema({
 
   generatedWebsites: defineTable({
     submissionId: v.id("submissions"),
+    // Website generation & deployment
     html: v.optional(v.string()),
     htmlContent: v.optional(v.string()),
     css: v.optional(v.string()),
@@ -62,15 +63,9 @@ export default defineSchema({
     netlifySiteId: v.optional(v.string()),
     htmlStorageId: v.optional(v.string()),
     publishedAt: v.optional(v.number()),
-    customizations: v.optional(v.any()),
     extractedContent: v.optional(v.any()),
     cfPagesProjectName: v.optional(v.string()),
-  }).index("by_submission_id", ["submissionId"])
-    .index("by_status", ["status"]),
-
-  websiteContent: defineTable({
-    submissionId: v.optional(v.id("submissions")),
-    websiteId: v.optional(v.id("generatedWebsites")),
+    // === Content fields (consolidated from websiteContent) ===
     // Hero section
     heroTitle: v.optional(v.string()),
     heroSubtitle: v.optional(v.string()),
@@ -86,11 +81,11 @@ export default defineSchema({
     aboutHeadline: v.optional(v.string()),
     aboutTagline: v.optional(v.string()),
     aboutTags: v.optional(v.any()),
-    aboutContent: v.optional(v.string()), // AI-generated about section content
+    aboutContent: v.optional(v.string()),
     // Featured section
     featuredHeadline: v.optional(v.string()),
     featuredSubHeadline: v.optional(v.string()),
-    featuredSubheadline: v.optional(v.string()), // lowercase variant
+    featuredSubheadline: v.optional(v.string()),
     featuredImages: v.optional(v.any()),
     featuredProducts: v.optional(v.any()),
     // Footer section
@@ -104,9 +99,9 @@ export default defineSchema({
     // Services section
     servicesHeadline: v.optional(v.string()),
     servicesSubheadline: v.optional(v.string()),
-    servicesDescription: v.optional(v.string()), // AI-generated services description
+    servicesDescription: v.optional(v.string()),
     // Contact section
-    contactCta: v.optional(v.string()), // AI-generated contact call-to-action
+    contactCta: v.optional(v.string()),
     // Business info
     businessName: v.optional(v.string()),
     tagline: v.optional(v.string()),
@@ -121,7 +116,7 @@ export default defineSchema({
     visibility: v.optional(v.any()),
     socialLinks: v.optional(v.any()),
     updatedAt: v.optional(v.number()),
-    // Airtable AI-enhanced images (structured with field names preserved)
+    // Airtable AI-enhanced images
     enhancedImages: v.optional(v.object({
       headshot: v.optional(v.object({
         url: v.optional(v.string()),
@@ -150,5 +145,133 @@ export default defineSchema({
     })),
     // Airtable sync tracking
     airtableSyncedAt: v.optional(v.number()),
+  }).index("by_submission_id", ["submissionId"])
+    .index("by_status", ["status"]),
+
+  // DEPRECATED: websiteContent is consolidated into generatedWebsites.
+  // Kept for backwards compatibility with existing data. Do not write new data here.
+  websiteContent: defineTable({
+    submissionId: v.optional(v.id("submissions")),
+    websiteId: v.optional(v.id("generatedWebsites")),
+    heroTitle: v.optional(v.string()),
+    heroSubtitle: v.optional(v.string()),
+    heroHeadline: v.optional(v.string()),
+    heroSubHeadline: v.optional(v.string()),
+    heroBadgeText: v.optional(v.string()),
+    heroCtaLabel: v.optional(v.string()),
+    heroCtaLink: v.optional(v.string()),
+    heroTestimonial: v.optional(v.any()),
+    aboutText: v.optional(v.string()),
+    aboutDescription: v.optional(v.string()),
+    aboutHeadline: v.optional(v.string()),
+    aboutTagline: v.optional(v.string()),
+    aboutTags: v.optional(v.any()),
+    aboutContent: v.optional(v.string()),
+    featuredHeadline: v.optional(v.string()),
+    featuredSubHeadline: v.optional(v.string()),
+    featuredSubheadline: v.optional(v.string()),
+    featuredImages: v.optional(v.any()),
+    featuredProducts: v.optional(v.any()),
+    footerDescription: v.optional(v.string()),
+    navbarHeadline: v.optional(v.string()),
+    navbarCtaLabel: v.optional(v.string()),
+    navbarCtaLink: v.optional(v.string()),
+    navbarCtaText: v.optional(v.string()),
+    navbarLinks: v.optional(v.any()),
+    servicesHeadline: v.optional(v.string()),
+    servicesSubheadline: v.optional(v.string()),
+    servicesDescription: v.optional(v.string()),
+    contactCta: v.optional(v.string()),
+    businessName: v.optional(v.string()),
+    tagline: v.optional(v.string()),
+    tone: v.optional(v.string()),
+    services: v.optional(v.any()),
+    images: v.optional(v.any()),
+    contact: v.optional(v.any()),
+    contactInfo: v.optional(v.any()),
+    customizations: v.optional(v.any()),
+    uniqueSellingPoints: v.optional(v.any()),
+    visibility: v.optional(v.any()),
+    socialLinks: v.optional(v.any()),
+    updatedAt: v.optional(v.number()),
+    enhancedImages: v.optional(v.object({
+      headshot: v.optional(v.object({
+        url: v.optional(v.string()),
+        storageId: v.optional(v.id("_storage")),
+      })),
+      interior_1: v.optional(v.object({
+        url: v.optional(v.string()),
+        storageId: v.optional(v.id("_storage")),
+      })),
+      interior_2: v.optional(v.object({
+        url: v.optional(v.string()),
+        storageId: v.optional(v.id("_storage")),
+      })),
+      exterior: v.optional(v.object({
+        url: v.optional(v.string()),
+        storageId: v.optional(v.id("_storage")),
+      })),
+      product_1: v.optional(v.object({
+        url: v.optional(v.string()),
+        storageId: v.optional(v.id("_storage")),
+      })),
+      product_2: v.optional(v.object({
+        url: v.optional(v.string()),
+        storageId: v.optional(v.id("_storage")),
+      })),
+    })),
+    airtableSyncedAt: v.optional(v.number()),
   }).index("by_submission_id", ["submissionId"]),
+
+  earnings: defineTable({
+    creatorId: v.id("creators"),
+    submissionId: v.id("submissions"),
+    amount: v.number(),
+    type: v.union(v.literal("submission_approved"), v.literal("referral_bonus"), v.literal("lead_bonus")),
+    status: v.union(v.literal("pending"), v.literal("available"), v.literal("withdrawn")),
+    createdAt: v.number(),
+  }).index("by_creator", ["creatorId"])
+    .index("by_submission", ["submissionId"]),
+
+  withdrawals: defineTable({
+    creatorId: v.id("creators"),
+    amount: v.number(),
+    payoutMethod: v.union(v.literal("gcash"), v.literal("maya"), v.literal("bank_transfer")),
+    accountDetails: v.string(),
+    status: v.union(v.literal("pending"), v.literal("processing"), v.literal("completed"), v.literal("failed")),
+    processedAt: v.optional(v.number()),
+    transactionRef: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_creator", ["creatorId"])
+    .index("by_status", ["status"]),
+
+  payoutMethods: defineTable({
+    creatorId: v.id("creators"),
+    type: v.union(v.literal("gcash"), v.literal("maya"), v.literal("bank_transfer")),
+    accountName: v.string(),
+    accountNumber: v.string(),
+    isDefault: v.boolean(),
+  }).index("by_creator", ["creatorId"]),
+
+  leads: defineTable({
+    submissionId: v.id("submissions"),
+    creatorId: v.id("creators"),
+    businessOwnerId: v.optional(v.string()),
+    source: v.union(v.literal("website"), v.literal("qr_code"), v.literal("direct")),
+    name: v.string(),
+    phone: v.string(),
+    email: v.optional(v.string()),
+    message: v.optional(v.string()),
+    status: v.union(v.literal("new"), v.literal("contacted"), v.literal("qualified"), v.literal("converted"), v.literal("lost")),
+    createdAt: v.number(),
+  }).index("by_submission", ["submissionId"])
+    .index("by_creator", ["creatorId"])
+    .index("by_status", ["status"]),
+
+  leadNotes: defineTable({
+    leadId: v.id("leads"),
+    creatorId: v.id("creators"),
+    content: v.string(),
+    createdAt: v.number(),
+  }).index("by_lead", ["leadId"]),
 });
