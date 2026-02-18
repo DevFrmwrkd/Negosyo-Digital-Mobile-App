@@ -76,25 +76,7 @@ function InitialLayout() {
     }
   }, [isLoaded, isSignedIn, segments, navigationState?.key]);
 
-  // Show loading screen while auth is loading or transitioning
-  if (!isLoaded || isAuthTransitioning) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-        <Image
-          source={require('../assets/icon.png')}
-          style={{ width: 150, height: 150 }}
-          resizeMode="contain"
-        />
-        {isAuthTransitioning && (
-          <ActivityIndicator
-            size="large"
-            color="#10b981"
-            style={{ marginTop: 24 }}
-          />
-        )}
-      </View>
-    );
-  }
+  const showOverlay = !isLoaded || isAuthTransitioning;
 
   return (
     <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
@@ -103,6 +85,28 @@ function InitialLayout() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(app)" />
       </Stack>
+      {showOverlay && (
+        <View style={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0, bottom: 0,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: '#fff',
+        }}>
+          <Image
+            source={require('../assets/icon.png')}
+            style={{ width: 150, height: 150 }}
+            resizeMode="contain"
+          />
+          {isAuthTransitioning && (
+            <ActivityIndicator
+              size="large"
+              color="#10b981"
+              style={{ marginTop: 24 }}
+            />
+          )}
+        </View>
+      )}
     </View>
   );
 }

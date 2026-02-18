@@ -22,7 +22,8 @@
     "convex/_generated/**/*.ts",
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
-    "nativewind-env.d.ts"
+    "nativewind-env.d.ts",
+    "declarations.d.ts"
   ],
   "exclude": [
     "convex/*.ts",
