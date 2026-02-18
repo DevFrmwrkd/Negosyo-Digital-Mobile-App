@@ -21,6 +21,7 @@ export default defineSchema({
     referredByCode: v.optional(v.string()), // Referral code used during signup
     role: v.optional(v.string()),
     status: v.optional(v.string()),
+    profileImage: v.optional(v.string()), // R2 public URL for profile photo
   }).index("by_clerk_id", ["clerkId"])
     .index("by_email", ["email"])
     .index("by_referral_code", ["referralCode"])
@@ -307,6 +308,9 @@ export default defineSchema({
       v.literal("new_lead"),
       v.literal("payout_sent"),
       v.literal("website_live"),
+      v.literal("submission_created"),
+      v.literal("profile_updated"),
+      v.literal("password_changed"),
       v.literal("system"),
     ),
     title: v.string(),

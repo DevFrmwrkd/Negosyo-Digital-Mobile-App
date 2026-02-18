@@ -37,6 +37,15 @@ export const create = mutation({
       });
     }
 
+    // Notify creator that submission was started
+    await ctx.scheduler.runAfter(0, internal.notifications.createAndSend, {
+      creatorId: args.creatorId,
+      type: "submission_created",
+      title: "New Submission Started",
+      body: `Your submission for "${args.businessName}" has been created. Complete all steps to submit it for review.`,
+      data: { submissionId },
+    });
+
     return submissionId;
   },
 });

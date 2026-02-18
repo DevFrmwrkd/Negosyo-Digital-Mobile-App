@@ -15,6 +15,9 @@ export const createAndSend = internalMutation({
       v.literal("new_lead"),
       v.literal("payout_sent"),
       v.literal("website_live"),
+      v.literal("submission_created"),
+      v.literal("profile_updated"),
+      v.literal("password_changed"),
       v.literal("system"),
     ),
     title: v.string(),
@@ -41,6 +44,35 @@ export const createAndSend = internalMutation({
     });
 
     return notificationId;
+  },
+});
+
+// ============================================================================
+// Public: Create notification from client (for client-side events like password changes)
+// ============================================================================
+
+export const createForClient = mutation({
+  args: {
+    creatorId: v.id("creators"),
+    type: v.union(
+      v.literal("profile_updated"),
+      v.literal("password_changed"),
+      v.literal("system"),
+    ),
+    title: v.string(),
+    body: v.string(),
+    data: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("notifications", {
+      creatorId: args.creatorId,
+      type: args.type,
+      title: args.title,
+      body: args.body,
+      data: args.data,
+      read: false,
+      sentAt: Date.now(),
+    });
   },
 });
 

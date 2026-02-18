@@ -56,29 +56,6 @@ export const approveSubmission = mutation({
       delta: 1,
     });
 
-    // Check if this creator was referred — qualify referral on first approved submission
-    const otherApproved = await ctx.db
-      .query("submissions")
-      .withIndex("by_creator_status", (q) =>
-        q.eq("creatorId", submission.creatorId).eq("status", "approved")
-      )
-      .first();
-
-    // If this is the first approved submission (only the one we just approved)
-    if (!otherApproved || otherApproved._id === args.id) {
-      const referral = await ctx.db
-        .query("referrals")
-        .withIndex("by_referred", (q) => q.eq("referredId", submission.creatorId))
-        .first();
-
-      if (referral && referral.status === "pending") {
-        await ctx.scheduler.runAfter(0, internal.referrals.qualifyByCreator, {
-          referredCreatorId: submission.creatorId,
-          submissionId: args.id,
-          bonusAmount: 100, // ₱100 referral bonus — configurable later
-        });
-      }
-    }
   },
 });
 
@@ -296,6 +273,31 @@ export const markPaid = mutation({
         : `Payment processed for "${submission.businessName}".`,
       data: { submissionId: args.id, amount: submission.creatorPayout },
     });
+
+    // Trigger referral bonus on first paid submission only
+    // Check for any previously paid submission (other than this one)
+    const previousPaid = await ctx.db
+      .query("submissions")
+      .withIndex("by_creator_status", (q) =>
+        q.eq("creatorId", submission.creatorId).eq("status", "paid")
+      )
+      .first();
+
+    // Only fire if this is the creator's first paid submission
+    if (!previousPaid || previousPaid._id === args.id) {
+      const referral = await ctx.db
+        .query("referrals")
+        .withIndex("by_referred", (q) => q.eq("referredId", submission.creatorId))
+        .first();
+
+      if (referral && referral.status === "pending") {
+        await ctx.scheduler.runAfter(0, internal.referrals.qualifyByCreator, {
+          referredCreatorId: submission.creatorId,
+          submissionId: args.id,
+          bonusAmount: 1000, // ₱1,000 one-time referral bonus
+        });
+      }
+    }
   },
 });
 

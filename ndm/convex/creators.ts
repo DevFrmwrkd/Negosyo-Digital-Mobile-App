@@ -85,9 +85,21 @@ export const update = mutation({
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),
     phone: v.optional(v.string()),
+    profileImage: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;
     await ctx.db.patch(id, updates);
+
+    // Notify creator about profile update
+    await ctx.scheduler.runAfter(0, internal.notifications.createAndSend, {
+      creatorId: id,
+      type: "profile_updated",
+      title: "Profile Updated",
+      body: args.profileImage
+        ? "Your profile photo and details have been updated successfully."
+        : "Your profile details have been updated successfully.",
+      data: {},
+    });
   },
 });

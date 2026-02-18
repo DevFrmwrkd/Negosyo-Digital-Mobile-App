@@ -62,8 +62,8 @@ function InitialLayout() {
     const inAuthGroup = segments[0] === '(auth)';
 
     if (isSignedIn && inAuthGroup) {
-      // User just signed in, redirect to dashboard
-      router.replace('/(app)/dashboard');
+      // User just signed in, redirect to tabs home
+      router.replace('/(app)/(tabs)/' as any);
       // Clear transitioning state after a short delay to ensure navigation completes
       setTimeout(() => setIsAuthTransitioning(false), 500);
     } else if (!isSignedIn && !inAuthGroup) {

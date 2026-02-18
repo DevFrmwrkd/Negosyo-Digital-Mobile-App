@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 import { useUser } from '@clerk/clerk-expo';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Id } from '../../convex/_generated/dataModel';
 
@@ -20,6 +20,9 @@ type NotificationType =
   | 'new_lead'
   | 'payout_sent'
   | 'website_live'
+  | 'submission_created'
+  | 'profile_updated'
+  | 'password_changed'
   | 'system';
 
 function getNotificationIcon(type: NotificationType): { name: string; color: string; bg: string } {
@@ -34,6 +37,12 @@ function getNotificationIcon(type: NotificationType): { name: string; color: str
       return { name: 'cash', color: '#10b981', bg: 'bg-emerald-100' };
     case 'website_live':
       return { name: 'globe', color: '#8b5cf6', bg: 'bg-purple-100' };
+    case 'submission_created':
+      return { name: 'add-circle', color: '#6366f1', bg: 'bg-indigo-100' };
+    case 'profile_updated':
+      return { name: 'person-circle', color: '#f59e0b', bg: 'bg-amber-100' };
+    case 'password_changed':
+      return { name: 'lock-closed', color: '#71717a', bg: 'bg-zinc-100' };
     case 'system':
     default:
       return { name: 'information-circle', color: '#71717a', bg: 'bg-zinc-100' };
@@ -70,6 +79,15 @@ export default function NotificationsScreen() {
   const markAllAsRead = useMutation(api.notifications.markAllAsRead);
 
   const unreadCount = notifications?.filter((n) => !n.read).length || 0;
+
+  // Auto-clear the bell badge whenever this screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (creator?._id) {
+        markAllAsRead({ creatorId: creator._id });
+      }
+    }, [creator?._id])
+  );
 
   const handleNotificationPress = async (notification: any) => {
     // Mark as read
