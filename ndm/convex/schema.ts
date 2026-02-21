@@ -13,7 +13,6 @@ export default defineSchema({
     totalEarnings: v.optional(v.number()),
     totalWithdrawn: v.optional(v.number()),
     submissionCount: v.optional(v.number()),
-    level: v.optional(v.number()), // Gamification level (1 = starter, 2 = active, 3 = pro, etc.)
     createdAt: v.optional(v.number()),
     updatedAt: v.optional(v.number()),
     lastActiveAt: v.optional(v.number()),
@@ -22,6 +21,7 @@ export default defineSchema({
     role: v.optional(v.string()),
     status: v.optional(v.string()),
     profileImage: v.optional(v.string()), // R2 public URL for profile photo
+    certifiedAt: v.optional(v.number()), // Timestamp when creator passed certification training
   }).index("by_clerk_id", ["clerkId"])
     .index("by_email", ["email"])
     .index("by_referral_code", ["referralCode"])
