@@ -167,6 +167,18 @@ export const submit = mutation({
       airtableSyncStatus: "pending_push",
     });
 
+    // Create a lead record from the business owner info
+    await ctx.db.insert("leads", {
+      submissionId: args.id,
+      creatorId: submission.creatorId,
+      source: "direct",
+      name: submission.ownerName,
+      phone: submission.ownerPhone,
+      email: submission.ownerEmail,
+      status: "new",
+      createdAt: Date.now(),
+    });
+
     // Analytics — increment submissionsCount
     const today = getTodayString();
     const month = getCurrentMonthString();
