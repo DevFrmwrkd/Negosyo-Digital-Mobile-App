@@ -21,7 +21,7 @@
 - **Why:** Convex queries without indexes scan the full table. These indexes optimize common query patterns (creator dashboard filtering, admin queue, geographic filtering).
 
 ---
-
+==
 ## Bug Fixes
 
 ### Submission status now sets to "submitted" instead of "pending"
@@ -566,3 +566,138 @@ Updated `convex/submissions.ts`:
 - `create` mutation now accepts `province`, `barangay`, `postalCode`, `coordinates` optional fields
 - `create` now increments `submissionCount` on the creator and sets `lastActiveAt`
 - `update` mutation now accepts `businessDescription`, `province`, `barangay`, `postalCode`, `coordinates`, `platformFee`
+
+---
+
+## Phase 5 — Creator Onboarding, Certification & UX Improvements
+
+### [App] Profile Image Upload to Cloudflare R2
+
+Added profile photo upload functionality via Cloudflare R2.
+
+**Files changed:**
+- `app/(app)/edit-profile.tsx` — Added camera icon overlay, `ImagePicker` integration, uploads to R2 via presigned URL, calls `api.creators.update` with `profileImage` URL
+- `convex/creators.ts` — `update` mutation now accepts `profileImage: v.optional(v.string())`
+- `convex/schema.ts` — Added `profileImage: v.optional(v.string())` to creators table
+
+### [App] Dashboard Profile Image Display
+
+- `app/(app)/(tabs)/index.tsx` — Dashboard header shows creator's profile image (from R2 URL) instead of default avatar icon
+
+### [App] Notification System Expansion
+
+Added two new notification types to the schema:
+- `submission_created` — triggered when a creator starts a new submission
+- `profile_updated` — triggered when a creator updates their profile
+
+**Files changed:**
+- `convex/schema.ts` — Added `"submission_created"` and `"profile_updated"` to notification type union
+- `convex/notifications.ts` — Updated type validators to include new types
+- `convex/creators.ts` — `update` mutation now sends `profile_updated` notification via `ctx.scheduler.runAfter`
+
+### [App] Empty State Rendering Fix (Android)
+
+- **Problem:** Empty state containers with `borderStyle: 'dashed'` crashed on Android
+- **Fix:** Replaced NativeWind `border-dashed` class with inline `style={{ borderStyle: 'dashed' }}` across all empty state views
+- **Files:** `app/(app)/(tabs)/index.tsx`, `app/(app)/submissions/index.tsx`, `app/(app)/notifications.tsx`
+
+### [App] Welcome / Onboarding Screen
+
+Created a welcome screen for new (uncertified) creators.
+
+**`app/(app)/onboarding.tsx`** — New screen with:
+- App logo and "Welcome to Negosyo Digital" greeting
+- Creator's first name display
+- 3 animated feature cards (Submit, Deploy, Earn) with stagger entrance
+- "Start Creator Training" button → navigates to certification training
+
+**Routing:** Dashboard (`index.tsx`) redirects uncertified creators (no `certifiedAt`) to `/(app)/onboarding`
+
+### [App] Creator Certification Training
+
+Built a multi-screen training flow that creators must complete before accessing the dashboard.
+
+**`app/(app)/training.tsx`** — Training intro screen:
+- Hero section with graduation cap icon
+- 5 training module cards (Lighting, Audio, Portrait, Interview Questions, Requirements)
+- Each card shows module name, description, and estimated time
+- "Start Training" button → navigates to lessons
+
+**`app/(app)/training-lessons.tsx`** — Interactive lessons screen:
+- 5 accordion-style lesson sections with expand/collapse animation (`LayoutAnimation`)
+- Each lesson contains 2-5 best practice tips
+- Progress tracking: lessons marked complete when expanded and viewed
+- "Start Certification Quiz" button (enabled only after all 5 lessons viewed) → navigates to quiz
+
+### [App] Certification Quiz
+
+**`app/(app)/certification-quiz.tsx`** — Full quiz screen with:
+- 5 multiple-choice questions covering all training modules
+- Slide animation between questions with progress indicator
+- Pass requirement: 4/5 correct answers (80%)
+- **Pass screen:** Checkmark animation, congratulations message, score badge, certificate card, "Go to Dashboard" button, share button in header, "Download Certificate" link
+- **Fail screen:** Graduation cap icon, "Not quite there yet!" message, score bar with percentage, "Try Again" button → navigates to `/(app)/training`
+
+**`convex/creators.ts`** — Added `certify` mutation:
+- Sets `certifiedAt: Date.now()` and `lastActiveAt: Date.now()` on the creator record
+- Sends congratulatory system notification via `ctx.scheduler.runAfter`
+
+### [App + Component] Certificate Card & Download/Share
+
+Created a shared certificate card component and integrated download/share functionality.
+
+**`components/CertificateCard.tsx`** — Shared component with `forwardRef<View>`:
+- Green top banner (#15803d) with app icon + "NEGOSYO DIGITAL"
+- Ribbon icon in light green circle
+- "CERTIFICATE OF COMPLETION" label
+- "Certified Creator" title with green accent divider
+- Dark blue name badge (#1e3a5f) with creator name
+- Body text about Local Business Digitization proficiency
+- DATE ISSUED section with month/year
+- Green bottom banner with "You can now start earning!"
+- Props: `creatorName`, `certMonth`, `certYear`
+- Uses `collapsable={false}` for Android `react-native-view-shot` compatibility
+
+**Certificate download (both quiz success + profile settings):**
+- Uses `react-native-view-shot` (`captureRef`) to capture certificate as PNG
+- Uses `expo-media-library` (`saveToLibraryAsync`) to save directly to device gallery
+- Bypasses `MediaLibrary.requestPermissionsAsync()` (crashes on Android 13+ requesting undeclared AUDIO permission)
+- Instead uses `PermissionsAndroid.request(WRITE_EXTERNAL_STORAGE)` for Android < 13, and no permission needed for Android 13+ (MediaStore write access is granted by default)
+
+**Certificate share:**
+- Uses `expo-sharing` (`shareAsync`) with PNG mime type to open system share sheet
+
+**`app/(app)/(tabs)/profile.tsx`** — Added "Show My Certificate" menu item:
+- Only visible if creator is certified (`certifiedAt` exists)
+- Opens full-screen Modal with certificate card
+- "Save to Gallery" and "Share Certificate" buttons
+
+**Dependencies added:**
+- `react-native-view-shot` 4.0.3
+- `expo-media-library` ~18.2.1
+
+**`app.json`** — Added:
+- `expo-media-library` plugin with `photosPermission`, `savePhotosPermission`, `isAccessMediaLocationEnabled`
+- `android.permission.READ_MEDIA_IMAGES` permission for Android 13+
+
+### [Schema] Removed `level` field from creators table
+
+- Removed `level: v.optional(v.number())` from `convex/schema.ts`
+- **Why:** Placeholder gamification field with no logic anywhere in the codebase. Can be re-added if/when gamification is implemented.
+
+### [Backend] `lastActiveAt` Tracking
+
+Previously `lastActiveAt` was only set when creating a submission. Now it's set in multiple places:
+
+**`convex/creators.ts`:**
+- `create` mutation — Sets `lastActiveAt` on new creator insert AND patches it for existing creators on every login (the `create` mutation is called on every app open for existing users via `index.tsx` auto-create)
+- `certify` mutation — Sets `lastActiveAt` alongside `certifiedAt`
+- `updateLastActive` mutation (new) — Dedicated mutation that looks up creator by Clerk ID and patches `lastActiveAt`
+
+**`app/(app)/_layout.tsx`:**
+- Added `useEffect` that calls `updateLastActive` when authenticated layout mounts with valid `userId`
+- Serves as a backup mechanism for tracking activity
+
+### [Backend] Notification Types Update
+
+Added `"password_changed"` to the notification type union in `convex/schema.ts` for future password change notifications.

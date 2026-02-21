@@ -32,17 +32,17 @@ export const create = mutation({
       .first();
 
     if (existing) {
-      // Update existing creator with default values if missing
-      if (!existing.role || !existing.status || existing.totalEarnings === undefined) {
-        await ctx.db.patch(existing._id, {
-          role: existing.role || "creator",
-          status: existing.status || "active",
-          totalEarnings: existing.totalEarnings ?? 0,
-        });
-      }
+      // Update lastActiveAt and fill in any missing default values
+      await ctx.db.patch(existing._id, {
+        lastActiveAt: Date.now(),
+        role: existing.role || "creator",
+        status: existing.status || "active",
+        totalEarnings: existing.totalEarnings ?? 0,
+      });
       return existing._id;
     }
 
+    const now = Date.now();
     const creatorId = await ctx.db.insert("creators", {
       clerkId: args.clerkId,
       email: args.email,
@@ -53,7 +53,8 @@ export const create = mutation({
       referralCode: args.referralCode,
       referredByCode: args.referredByCode,
       balance: 0,
-      createdAt: Date.now(),
+      createdAt: now,
+      lastActiveAt: now,
       role: "creator",
       status: "active",
       totalEarnings: 0,
@@ -99,6 +100,42 @@ export const update = mutation({
       body: args.profileImage
         ? "Your profile photo and details have been updated successfully."
         : "Your profile details have been updated successfully.",
+      data: {},
+    });
+  },
+});
+
+export const updateLastActive = mutation({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const creator = await ctx.db
+      .query("creators")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (creator) {
+      await ctx.db.patch(creator._id, {
+        lastActiveAt: Date.now(),
+      });
+    }
+  },
+});
+
+export const certify = mutation({
+  args: {
+    id: v.id("creators"),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      certifiedAt: Date.now(),
+      lastActiveAt: Date.now(),
+    });
+
+    await ctx.scheduler.runAfter(0, internal.notifications.createAndSend, {
+      creatorId: args.id,
+      type: "system",
+      title: "Certification Complete!",
+      body: "Congratulations! You are now a certified creator. You can start submitting businesses.",
       data: {},
     });
   },

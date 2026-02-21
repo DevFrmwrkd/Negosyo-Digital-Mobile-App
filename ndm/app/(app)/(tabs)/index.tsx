@@ -10,7 +10,7 @@ import {
 import { useUser, useClerk } from '@clerk/clerk-expo';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { useRouter, Link } from 'expo-router';
+import { useRouter, Link, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePushNotifications } from '../../../hooks/usePushNotifications';
@@ -108,6 +108,11 @@ export default function HomeScreen() {
         <ActivityIndicator size="large" color="#10b981" />
       </View>
     );
+  }
+
+  // New creator who hasn't completed certification training yet
+  if (!(creator as any).certifiedAt) {
+    return <Redirect href={'/(app)/training' as any} />;
   }
 
   const recentSubmissions = submissions?.slice(0, 3) || [];

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
+  Platform,
+  PermissionsAndroid,
 } from 'react-native';
 import { useUser, useClerk } from '@clerk/clerk-expo';
 import { useQuery } from 'convex/react';
@@ -14,6 +17,10 @@ import { api } from '../../../convex/_generated/api';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
+import CertificateCard from '../../../components/CertificateCard';
 
 type MenuSection = {
   title: string;
@@ -34,11 +41,56 @@ export default function ProfileScreen() {
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
   const [signingOut, setSigningOut] = useState(false);
+  const [showCertModal, setShowCertModal] = useState(false);
+  const certModalRef = useRef<View>(null);
 
   const creator = useQuery(
     api.creators.getByClerkId,
     user ? { clerkId: user.id } : 'skip'
   );
+
+  const handleShareCert = useCallback(async () => {
+    try {
+      const uri = await captureRef(certModalRef, {
+        format: 'png',
+        quality: 1,
+      });
+      await Sharing.shareAsync(uri, {
+        mimeType: 'image/png',
+        dialogTitle: 'Share your certificate',
+      });
+    } catch {
+      Alert.alert('Error', 'Could not share certificate. Please try again.');
+    }
+  }, []);
+
+  const handleDownloadCert = useCallback(async () => {
+    try {
+      if (Platform.OS === 'android' && (Platform.Version as number) < 33) {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+          {
+            title: 'Save Certificate',
+            message: 'Allow the app to save your certificate to your gallery.',
+            buttonPositive: 'Allow',
+          }
+        );
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert('Permission needed', 'Please allow access to save the certificate.');
+          return;
+        }
+      }
+      const uri = await captureRef(certModalRef, {
+        format: 'png',
+        quality: 1,
+      });
+      const fileUri = uri.startsWith('file://') ? uri : `file://${uri}`;
+      await MediaLibrary.saveToLibraryAsync(fileUri);
+      Alert.alert('Saved!', 'Certificate has been saved to your gallery.');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Could not save certificate. Please try again.');
+    }
+  }, []);
 
   const handleSignOut = () => {
     Alert.alert(
@@ -71,32 +123,47 @@ export default function ProfileScreen() {
   const email       = creator?.email || user?.primaryEmailAddress?.emailAddress || '';
   const initial     = displayName.charAt(0).toUpperCase();
 
+  const isCertified = !!(creator as any)?.certifiedAt;
+
+  const accountItems: MenuSection['items'] = [
+    {
+      icon: 'person-outline',
+      label: 'Edit Profile',
+      sublabel: 'Update your name and details',
+      onPress: () => router.push('/(app)/edit-profile' as any),
+      showArrow: true,
+    },
+    {
+      icon: 'notifications-outline',
+      label: 'Notifications',
+      sublabel: 'Manage your notification settings',
+      onPress: () => router.push('/(app)/notifications' as any),
+      showArrow: true,
+    },
+    {
+      icon: 'shield-checkmark-outline',
+      label: 'Change Password',
+      sublabel: 'Update your account password',
+      onPress: () => router.push('/(app)/change-password' as any),
+      showArrow: true,
+    },
+  ];
+
+  if (isCertified) {
+    accountItems.push({
+      icon: 'ribbon-outline',
+      label: 'Show My Certificate',
+      sublabel: 'View and share your certification',
+      onPress: () => setShowCertModal(true),
+      showArrow: true,
+      tintColor: '#10b981',
+    });
+  }
+
   const menuSections: MenuSection[] = [
     {
       title: 'Account',
-      items: [
-        {
-          icon: 'person-outline',
-          label: 'Edit Profile',
-          sublabel: 'Update your name and details',
-          onPress: () => router.push('/(app)/edit-profile' as any),
-          showArrow: true,
-        },
-        {
-          icon: 'notifications-outline',
-          label: 'Notifications',
-          sublabel: 'Manage your notification settings',
-          onPress: () => router.push('/(app)/notifications' as any),
-          showArrow: true,
-        },
-        {
-          icon: 'shield-checkmark-outline',
-          label: 'Change Password',
-          sublabel: 'Update your account password',
-          onPress: () => router.push('/(app)/change-password' as any),
-          showArrow: true,
-        },
-      ],
+      items: accountItems,
     },
     {
       title: 'My Activity',
@@ -309,6 +376,123 @@ export default function ProfileScreen() {
         </View>
 
       </ScrollView>
+
+      {/* Certificate Modal */}
+      <Modal
+        visible={showCertModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowCertModal(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: 20,
+        }}>
+          <View style={{
+            backgroundColor: '#fff',
+            borderRadius: 24,
+            width: '100%',
+            maxHeight: '85%',
+            overflow: 'hidden',
+          }}>
+            {/* Modal header */}
+            <View style={{
+              flexDirection: 'row', alignItems: 'center',
+              paddingHorizontal: 16, paddingVertical: 14,
+              borderBottomWidth: 1, borderBottomColor: '#f4f4f5',
+            }}>
+              <TouchableOpacity
+                onPress={() => setShowCertModal(false)}
+                style={{
+                  width: 32, height: 32, borderRadius: 16,
+                  backgroundColor: '#f4f4f5',
+                  alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="close" size={18} color="#18181b" />
+              </TouchableOpacity>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#18181b', flex: 1, textAlign: 'center' }}>
+                My Certificate
+              </Text>
+              <TouchableOpacity
+                onPress={handleShareCert}
+                style={{
+                  width: 32, height: 32, borderRadius: 16,
+                  backgroundColor: '#f4f4f5',
+                  alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="share-outline" size={16} color="#18181b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Certificate */}
+            <ScrollView
+              contentContainerStyle={{ padding: 20, alignItems: 'center' }}
+              showsVerticalScrollIndicator={false}
+            >
+              <CertificateCard
+                ref={certModalRef}
+                creatorName={
+                  creator
+                    ? `${(creator.firstName || '').toUpperCase()} ${(creator.lastName || '').toUpperCase()}`.trim()
+                    : ''
+                }
+                certMonth={
+                  (creator as any)?.certifiedAt
+                    ? new Date((creator as any).certifiedAt).toLocaleString('en-US', { month: 'long' })
+                    : new Date().toLocaleString('en-US', { month: 'long' })
+                }
+                certYear={
+                  (creator as any)?.certifiedAt
+                    ? new Date((creator as any).certifiedAt).getFullYear()
+                    : new Date().getFullYear()
+                }
+              />
+            </ScrollView>
+
+            {/* Action buttons */}
+            <View style={{
+              paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20,
+              borderTopWidth: 1, borderTopColor: '#f4f4f5',
+            }}>
+              <TouchableOpacity
+                onPress={handleDownloadCert}
+                activeOpacity={0.85}
+                style={{
+                  backgroundColor: '#10b981',
+                  height: 50, borderRadius: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center', justifyContent: 'center',
+                  marginBottom: 8,
+                }}
+              >
+                <Ionicons name="download-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>
+                  Save to Gallery
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleShareCert}
+                activeOpacity={0.7}
+                style={{
+                  height: 44, borderRadius: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="share-outline" size={16} color="#10b981" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#10b981', fontSize: 14, fontWeight: '700' }}>
+                  Share Certificate
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
