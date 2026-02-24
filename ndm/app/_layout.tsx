@@ -3,6 +3,8 @@ import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-rout
 import { useAuth } from '@clerk/clerk-expo';
 import { View, Image, ActivityIndicator, LogBox } from 'react-native';
 import { AppProviders } from '../providers/AppProviders';
+import { useNetwork } from '../providers/NetworkProvider';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SplashScreen from 'expo-splash-screen';
 import '../global.css';
 
@@ -29,8 +31,11 @@ if (__DEV__) {
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
 
+const AUTH_CACHE_KEY = 'ndm_was_signed_in';
+
 function InitialLayout() {
   const { isLoaded, isSignedIn } = useAuth();
+  const { isConnected } = useNetwork();
   const segments = useSegments();
   const router = useRouter();
   const navigationState = useRootNavigationState();
@@ -38,45 +43,60 @@ function InitialLayout() {
   // Track auth transition state to prevent flash
   const [isAuthTransitioning, setIsAuthTransitioning] = useState(false);
   const previousSignedIn = useRef<boolean | null>(null);
+  const [cachedAuth, setCachedAuth] = useState<boolean | null>(null);
+
+  // Load cached auth state on mount
+  useEffect(() => {
+    AsyncStorage.getItem(AUTH_CACHE_KEY).then((val) => {
+      setCachedAuth(val === 'true');
+    });
+  }, []);
+
+  // When offline with cached auth, treat as effectively loaded so we bypass Clerk gates
+  // isConnected === null means we haven't determined network state yet — wait
+  const networkKnown = isConnected !== null;
+  const effectivelyLoaded = networkKnown && (isLoaded || (isConnected === false && cachedAuth === true));
 
   const onLayoutRootView = useCallback(async () => {
-    if (isLoaded) {
+    if (effectivelyLoaded) {
       await SplashScreen.hideAsync();
     }
-  }, [isLoaded]);
+  }, [effectivelyLoaded]);
 
   // Detect auth state changes and set transitioning state
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!effectivelyLoaded) return;
 
     // If auth state changed (signed in or out), we're transitioning
     if (previousSignedIn.current !== null && previousSignedIn.current !== isSignedIn) {
       setIsAuthTransitioning(true);
     }
     previousSignedIn.current = isSignedIn;
-  }, [isLoaded, isSignedIn]);
+  }, [effectivelyLoaded, isSignedIn]);
 
   useEffect(() => {
-    if (!isLoaded || !navigationState?.key) return;
+    if (!effectivelyLoaded || !navigationState?.key) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
-    if (isSignedIn && inAuthGroup) {
-      // User just signed in, redirect to tabs home
+    // When offline with cached auth, treat user as "signed in" for routing purposes
+    const effectivelySignedIn = isSignedIn || (isConnected === false && cachedAuth === true);
+
+    if (effectivelySignedIn && inAuthGroup) {
+      // User is signed in (or offline with cached auth), redirect to tabs home
       router.replace('/(app)/(tabs)/' as any);
-      // Clear transitioning state after a short delay to ensure navigation completes
       setTimeout(() => setIsAuthTransitioning(false), 500);
-    } else if (!isSignedIn && !inAuthGroup) {
-      // User signed out, redirect to login
+    } else if (!effectivelySignedIn && !inAuthGroup) {
+      // Truly not signed in — redirect to login
       router.replace('/(auth)/login');
       setTimeout(() => setIsAuthTransitioning(false), 500);
     } else {
       // Already in correct group, clear transitioning state
       setIsAuthTransitioning(false);
     }
-  }, [isLoaded, isSignedIn, segments, navigationState?.key]);
+  }, [effectivelyLoaded, isSignedIn, segments, navigationState?.key, isConnected, cachedAuth]);
 
-  const showOverlay = !isLoaded || isAuthTransitioning;
+  const showOverlay = !effectivelyLoaded || isAuthTransitioning;
 
   return (
     <View style={{ flex: 1 }} onLayout={onLayoutRootView}>

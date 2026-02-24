@@ -13,17 +13,22 @@ import { useRouter, Redirect } from 'expo-router';
 import { useAuth } from '@clerk/clerk-expo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNetwork } from '../providers/NetworkProvider';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const ONBOARDING_KEY = 'ndm_has_seen_onboarding';
 
+const AUTH_CACHE_KEY = 'ndm_was_signed_in';
+
 export default function Index() {
   const { isLoaded, isSignedIn } = useAuth();
+  const { isConnected } = useNetwork();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [cachedAuth, setCachedAuth] = useState<boolean | null>(null);
 
   // Animation values
   const logoOpacity = useRef(new Animated.Value(0)).current;
@@ -37,18 +42,19 @@ export default function Index() {
   const ctaOpacity = useRef(new Animated.Value(0)).current;
   const ctaTranslateY = useRef(new Animated.Value(40)).current;
 
-  // Check if onboarding was already seen
+  // Check if onboarding was already seen + load cached auth
   useEffect(() => {
     const check = async () => {
       try {
-        const seen = await AsyncStorage.getItem(ONBOARDING_KEY);
-        if (seen === 'true') {
-          setShowWelcome(false);
-        } else {
-          setShowWelcome(true);
-        }
+        const [seen, authCache] = await Promise.all([
+          AsyncStorage.getItem(ONBOARDING_KEY),
+          AsyncStorage.getItem(AUTH_CACHE_KEY),
+        ]);
+        setShowWelcome(seen !== 'true');
+        setCachedAuth(authCache === 'true');
       } catch {
         setShowWelcome(true);
+        setCachedAuth(false);
       } finally {
         setCheckingOnboarding(false);
       }
@@ -102,8 +108,11 @@ export default function Index() {
     router.replace('/(auth)/login');
   };
 
-  // Still loading auth or checking AsyncStorage
-  if (!isLoaded || checkingOnboarding) {
+  // Wait for network state + cached auth + onboarding check
+  const networkKnown = isConnected !== null;
+  const effectivelyLoaded = networkKnown && (isLoaded || (isConnected === false && cachedAuth === true));
+
+  if (!effectivelyLoaded || checkingOnboarding) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#10b981" />
@@ -111,8 +120,10 @@ export default function Index() {
     );
   }
 
-  // Already signed in → go to app
-  if (isSignedIn) {
+  // Offline with cached auth → go straight to app (keep as draft mode)
+  const effectivelySignedIn = isSignedIn || (isConnected === false && cachedAuth === true);
+
+  if (effectivelySignedIn) {
     return <Redirect href={'/(app)/(tabs)/' as any} />;
   }
 

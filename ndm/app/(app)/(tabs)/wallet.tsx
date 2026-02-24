@@ -12,6 +12,8 @@ import { api } from '../../../convex/_generated/api';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNetwork } from '../../../providers/NetworkProvider';
+import { OfflineBanner } from '../../../components/OfflineBanner';
 
 function timeAgo(timestamp: number): string {
   const diff = Date.now() - timestamp;
@@ -36,6 +38,8 @@ export default function WalletScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useUser();
+  const { isConnected } = useNetwork();
+  const isOffline = isConnected === false;
 
   const creator = useQuery(
     api.creators.getByClerkId,
@@ -50,7 +54,8 @@ export default function WalletScreen() {
     creator?._id ? { creatorId: creator._id } : 'skip'
   );
 
-  if (creator === undefined) {
+  // When online, wait for Convex. When offline, skip — layout already verified auth.
+  if (!isOffline && creator === undefined) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#10b981" />
@@ -69,6 +74,7 @@ export default function WalletScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+      <OfflineBanner />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
 
         {/* Header */}

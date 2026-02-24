@@ -4,7 +4,15 @@ import { ConvexProviderWithClerk } from 'convex/react-clerk';
 import { ConvexReactClient } from 'convex/react';
 import { useAuth, useClerk } from '@clerk/clerk-expo';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, ActivityIndicator, Text } from 'react-native';
+import { NetworkProvider } from './NetworkProvider';
+
+let NetInfoModule: any = null;
+try {
+  NetInfoModule = require('@react-native-community/netinfo').default;
+} catch {}
+
 
 // Environment variables - set via EAS secrets for production builds
 const CONVEX_URL = process.env.EXPO_PUBLIC_CONVEX_URL || 'https://diligent-ibex-454.convex.cloud';
@@ -48,19 +56,54 @@ function ConvexClerkProviderInner({ children }: { children: React.ReactNode }) {
 function ClerkLoadedWithFallback({ children }: { children: React.ReactNode }) {
   const { loaded } = useClerk();
   const [showTimeout, setShowTimeout] = useState(false);
+  const [forceRender, setForceRender] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!loaded) {
+    if (loaded) return;
+
+    let cancelled = false;
+
+    // If offline with cached auth, bypass Clerk load wait immediately
+    const checkOfflineAuth = async () => {
+      try {
+        if (NetInfoModule) {
+          const state = await NetInfoModule.fetch();
+          if (!state.isConnected && !cancelled) {
+            const cached = await AsyncStorage.getItem('ndm_was_signed_in');
+            if (cached === 'true' && !cancelled) {
+              console.log('Offline with cached auth — bypassing Clerk load wait');
+              setForceRender(true);
+              return;
+            }
+          }
+        }
+      } catch {}
+    };
+    checkOfflineAuth();
+
+    const warningTimer = setTimeout(() => {
+      if (!cancelled) {
         setShowTimeout(true);
         console.log('Clerk is taking longer than expected to load...');
       }
     }, 5000);
 
-    return () => clearTimeout(timer);
+    // Absolute fallback for any scenario where Clerk never loads
+    const forceTimer = setTimeout(() => {
+      if (!cancelled) {
+        console.log('Clerk failed to load after 10s, force rendering...');
+        setForceRender(true);
+      }
+    }, 10000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(warningTimer);
+      clearTimeout(forceTimer);
+    };
   }, [loaded]);
 
-  if (!loaded) {
+  if (!loaded && !forceRender) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#10b981" />
@@ -79,7 +122,9 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
       <ClerkLoadedWithFallback>
         <ConvexClerkProviderInner>
-          {children}
+          <NetworkProvider>
+            {children}
+          </NetworkProvider>
         </ConvexClerkProviderInner>
       </ClerkLoadedWithFallback>
     </ClerkProvider>

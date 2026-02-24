@@ -13,6 +13,8 @@ import { api } from '../../../convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
+import { useNetwork } from '../../../providers/NetworkProvider';
+import { OfflineBanner } from '../../../components/OfflineBanner';
 
 const HOW_IT_WORKS = [
   { title: 'Share your code',  desc: 'Send your referral code to fellow business owners.', icon: 'share-social-outline' as const, color: '#6366f1', bg: '#eef2ff' },
@@ -36,6 +38,8 @@ function timeAgo(ts: number): string {
 export default function ReferralsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useUser();
+  const { isConnected } = useNetwork();
+  const isOffline = isConnected === false;
   const [copied, setCopied] = useState(false);
 
   const creator = useQuery(
@@ -72,7 +76,8 @@ export default function ReferralsScreen() {
     }
   };
 
-  const isLoading = creator === undefined || referralList === undefined || stats === undefined;
+  // When online, wait for Convex. When offline, skip — layout already verified auth.
+  const isLoading = !isOffline && (creator === undefined || referralList === undefined || stats === undefined);
 
   if (isLoading) {
     return (
@@ -86,6 +91,7 @@ export default function ReferralsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+      <OfflineBanner />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 24 }}
@@ -190,7 +196,7 @@ export default function ReferralsScreen() {
               People You Referred
             </Text>
 
-            {referralList.length === 0 ? (
+            {(referralList?.length ?? 0) === 0 ? (
               <View style={{
                 backgroundColor: '#fff', borderRadius: 20, padding: 28,
                 alignItems: 'center',
@@ -214,9 +220,9 @@ export default function ReferralsScreen() {
                 shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
                 shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
               }}>
-                {referralList.map((ref: any, idx: number) => {
+                {(referralList ?? []).map((ref: any, idx: number) => {
                   const meta = STATUS_META[ref.status] ?? STATUS_META.pending;
-                  const isLast = idx === referralList.length - 1;
+                  const isLast = idx === (referralList ?? []).length - 1;
                   const initial = ((ref.referredName as string) || 'U').charAt(0).toUpperCase();
                   return (
                     <View key={ref._id}>

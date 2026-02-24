@@ -21,6 +21,8 @@ import { Audio, Video, ResizeMode } from 'expo-av';
 import { CameraView, CameraType, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Id } from '../../../convex/_generated/dataModel';
+import { useNetwork } from '../../../providers/NetworkProvider';
+import { OfflineBanner } from '../../../components/OfflineBanner';
 
 type InterviewType = 'video' | 'audio' | null;
 
@@ -43,6 +45,7 @@ export default function SubmitInterviewScreen() {
     user ? { clerkId: user.id } : 'skip'
   );
 
+  const { isConnected } = useNetwork();
   const insets = useSafeAreaInsets();
   const generateR2UploadUrl = useMutation(api.r2.generateUploadUrl);
   const updateSubmission = useMutation(api.submissions.update);
@@ -95,19 +98,26 @@ export default function SubmitInterviewScreen() {
   const [audioStatus, setAudioStatus] = useState<any>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
 
+  const isOfflinePending = submissionId === 'offline_pending';
+
   const submission = useQuery(
     api.submissions.getById,
-    submissionId ? { id: submissionId as Id<'submissions'> } : 'skip'
+    submissionId && !isOfflinePending ? { id: submissionId as Id<'submissions'> } : 'skip'
   );
 
   // Load submission ID
   useEffect(() => {
     const loadSubmissionId = async () => {
-      const id = await AsyncStorage.getItem('current_submission_id');
+      let id = await AsyncStorage.getItem('current_submission_id');
       if (!id) {
-        // No active submission - redirect to dashboard instead of allowing re-upload
-        router.replace('/(app)/dashboard');
-        return;
+        const pendingSync = await AsyncStorage.getItem('submission_pending_sync');
+        if (pendingSync) {
+          id = 'offline_pending';
+          await AsyncStorage.setItem('current_submission_id', id);
+        } else {
+          router.replace('/(app)/dashboard');
+          return;
+        }
       }
       setSubmissionId(id);
     };
@@ -541,6 +551,25 @@ export default function SubmitInterviewScreen() {
       return;
     }
 
+    // OFFLINE PATH: Save recording URI locally and navigate
+    if (!isConnected || isOfflinePending) {
+      try {
+        if (recordingUri && interviewType) {
+          await AsyncStorage.setItem('submission_pending_interview', JSON.stringify({
+            recordingUri,
+            parallelAudioUri: parallelAudioUri || null,
+            type: interviewType,
+            submissionId,
+            savedAt: Date.now(),
+          }));
+        }
+        router.push('/(app)/submit/review');
+      } catch (err) {
+        setError('Failed to save recording locally');
+      }
+      return;
+    }
+
     setLoading(true);
     setUploadProgress(0);
     setError(null);
@@ -703,6 +732,8 @@ export default function SubmitInterviewScreen() {
         <Text className="text-sm text-zinc-500 font-medium">STEP 3 OF 4</Text>
       </View>
 
+      <OfflineBanner />
+
       {/* Progress Bar */}
       <View className="px-4 mb-4">
         <View className="h-1.5 bg-zinc-200 rounded-full overflow-hidden">
@@ -721,6 +752,18 @@ export default function SubmitInterviewScreen() {
         {error && (
           <View className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
             <Text className="text-red-600 text-sm font-medium">{error}</Text>
+          </View>
+        )}
+
+        {/* Offline Warning */}
+        {!isConnected && (
+          <View className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+            <View className="flex-row items-center">
+              <Ionicons name="cloud-offline-outline" size={20} color="#d97706" />
+              <Text className="text-amber-700 text-sm font-medium ml-2 flex-1">
+                You're offline. Record your interview now — it'll upload automatically when you're back online.
+              </Text>
+            </View>
           </View>
         )}
 

@@ -20,8 +20,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Video, ResizeMode } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Id } from '../../../convex/_generated/dataModel';
+import { useNetwork } from '../../../providers/NetworkProvider';
+import { OfflineBanner } from '../../../components/OfflineBanner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+interface OfflineData {
+  formData?: {
+    businessName: string;
+    businessType: string;
+    ownerName: string;
+    ownerPhone: string;
+    ownerEmail?: string;
+    address: string;
+    city: string;
+  };
+  pendingPhotos?: { photoUris: string[]; existingPhotos: string[] };
+  pendingInterview?: { type: 'video' | 'audio'; recordingUri: string };
+}
 
 export default function SubmitReviewScreen() {
   const router = useRouter();
@@ -32,12 +48,14 @@ export default function SubmitReviewScreen() {
     user ? { clerkId: user.id } : 'skip'
   );
 
+  const { isConnected } = useNetwork();
   const insets = useSafeAreaInsets();
   const submitSubmission = useMutation(api.submissions.submit);
 
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [offlineData, setOfflineData] = useState<OfflineData | null>(null);
 
   // Video player state
   const videoRef = useRef<Video>(null);
@@ -48,9 +66,11 @@ export default function SubmitReviewScreen() {
   const [isVideoLoading, setIsVideoLoading] = useState(false);
   const fullscreenVideoRef = useRef<Video>(null);
 
+  const isOfflinePending = submissionId === 'offline_pending';
+
   const submission = useQuery(
     api.submissions.getById,
-    submissionId ? { id: submissionId as Id<'submissions'> } : 'skip'
+    submissionId && !isOfflinePending ? { id: submissionId as Id<'submissions'> } : 'skip'
   );
 
   const photoUrls = useQuery(
@@ -71,16 +91,49 @@ export default function SubmitReviewScreen() {
   // Load submission ID
   useEffect(() => {
     const loadSubmissionId = async () => {
-      const id = await AsyncStorage.getItem('current_submission_id');
+      let id = await AsyncStorage.getItem('current_submission_id');
       if (!id) {
-        // No active submission - redirect to dashboard instead of allowing re-upload
-        router.replace('/(app)/dashboard');
-        return;
+        const pendingSync = await AsyncStorage.getItem('submission_pending_sync');
+        if (pendingSync) {
+          id = 'offline_pending';
+          await AsyncStorage.setItem('current_submission_id', id);
+        } else {
+          router.replace('/(app)/dashboard');
+          return;
+        }
       }
       setSubmissionId(id);
     };
     loadSubmissionId();
   }, []);
+
+  // Load offline cached data when in offline mode
+  useEffect(() => {
+    if (!isOfflinePending && submission) return;
+
+    const loadOfflineData = async () => {
+      const data: OfflineData = {};
+
+      const syncRaw = await AsyncStorage.getItem('submission_pending_sync');
+      if (syncRaw) {
+        const parsed = JSON.parse(syncRaw);
+        data.formData = parsed.formData;
+      }
+
+      const photosRaw = await AsyncStorage.getItem('submission_pending_photos');
+      if (photosRaw) {
+        data.pendingPhotos = JSON.parse(photosRaw);
+      }
+
+      const interviewRaw = await AsyncStorage.getItem('submission_pending_interview');
+      if (interviewRaw) {
+        data.pendingInterview = JSON.parse(interviewRaw);
+      }
+
+      setOfflineData(data);
+    };
+    loadOfflineData();
+  }, [isOfflinePending, submission]);
 
   const handleSubmit = async () => {
     if (!submissionId || !submission) return;
@@ -122,7 +175,7 @@ export default function SubmitReviewScreen() {
     );
   };
 
-  if (!isLoaded || creator === undefined || !submissionId || submission === undefined) {
+  if (!isLoaded || creator === undefined || !submissionId || (!isOfflinePending && submission === undefined)) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
         <ActivityIndicator size="large" color="#10b981" />
@@ -130,7 +183,7 @@ export default function SubmitReviewScreen() {
     );
   }
 
-  if (!submission) {
+  if (!isOfflinePending && !submission) {
     return (
       <SafeAreaView className="flex-1 bg-white items-center justify-center px-6">
         <Ionicons name="alert-circle-outline" size={48} color="#ef4444" />
@@ -145,9 +198,20 @@ export default function SubmitReviewScreen() {
     );
   }
 
-  const hasPhotos = submission.photos && submission.photos.length >= 3;
-  const hasVideoInterview = !!submission.videoStorageId;
-  const hasAudioInterview = !!submission.audioStorageId;
+  // Compute data source: Convex submission or offline cache
+  const offlinePhotoCount = offlineData?.pendingPhotos
+    ? offlineData.pendingPhotos.photoUris.length + offlineData.pendingPhotos.existingPhotos.length
+    : 0;
+
+  const hasPhotos = submission
+    ? (submission.photos && submission.photos.length >= 3)
+    : offlinePhotoCount >= 3;
+  const hasVideoInterview = submission
+    ? !!submission.videoStorageId
+    : offlineData?.pendingInterview?.type === 'video';
+  const hasAudioInterview = submission
+    ? !!submission.audioStorageId
+    : offlineData?.pendingInterview?.type === 'audio';
   const hasInterview = hasAudioInterview || hasVideoInterview;
   const canSubmit = hasPhotos;
 
@@ -202,6 +266,8 @@ export default function SubmitReviewScreen() {
         <Text className="text-sm text-zinc-500 font-medium">STEP 4 OF 4</Text>
       </View>
 
+      <OfflineBanner />
+
       {/* Progress Bar */}
       <View className="px-4 mb-4">
         <View className="h-1.5 bg-zinc-200 rounded-full overflow-hidden">
@@ -223,6 +289,18 @@ export default function SubmitReviewScreen() {
           </View>
         )}
 
+        {/* Offline Pending Banner */}
+        {isOfflinePending && (
+          <View className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+            <View className="flex-row items-center">
+              <Ionicons name="cloud-offline-outline" size={20} color="#d97706" />
+              <Text className="text-amber-700 text-sm font-medium ml-2 flex-1">
+                Your submission is saved locally. Everything will upload automatically when you're back online.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Business Info Card */}
         <View className="bg-white rounded-xl p-4 mb-4">
           <View className="flex-row items-center justify-between mb-3">
@@ -236,31 +314,35 @@ export default function SubmitReviewScreen() {
             <View className="flex-row mb-2">
               <Text className="text-zinc-500 text-sm w-24">Name:</Text>
               <Text className="text-zinc-900 text-sm font-medium flex-1">
-                {submission.businessName}
+                {submission?.businessName || offlineData?.formData?.businessName || '—'}
               </Text>
             </View>
             <View className="flex-row mb-2">
               <Text className="text-zinc-500 text-sm w-24">Type:</Text>
               <Text className="text-zinc-900 text-sm font-medium flex-1">
-                {submission.businessType}
+                {submission?.businessType || offlineData?.formData?.businessType || '—'}
               </Text>
             </View>
             <View className="flex-row mb-2">
               <Text className="text-zinc-500 text-sm w-24">Owner:</Text>
               <Text className="text-zinc-900 text-sm font-medium flex-1">
-                {submission.ownerName}
+                {submission?.ownerName || offlineData?.formData?.ownerName || '—'}
               </Text>
             </View>
             <View className="flex-row mb-2">
               <Text className="text-zinc-500 text-sm w-24">Phone:</Text>
               <Text className="text-zinc-900 text-sm font-medium flex-1">
-                {submission.ownerPhone}
+                {submission?.ownerPhone || offlineData?.formData?.ownerPhone || '—'}
               </Text>
             </View>
             <View className="flex-row mb-2">
               <Text className="text-zinc-500 text-sm w-24">Address:</Text>
               <Text className="text-zinc-900 text-sm font-medium flex-1">
-                {submission.address}, {submission.city}
+                {submission
+                  ? `${submission.address}, ${submission.city}`
+                  : offlineData?.formData
+                    ? `${offlineData.formData.address}, ${offlineData.formData.city}`
+                    : '—'}
               </Text>
             </View>
           </View>
@@ -281,7 +363,7 @@ export default function SubmitReviewScreen() {
                     hasPhotos ? 'text-emerald-700' : 'text-amber-700'
                   }`}
                 >
-                  {submission.photos?.length || 0}/3 min
+                  {submission?.photos?.length || offlinePhotoCount || 0}/3 min
                 </Text>
               </View>
             </View>
@@ -290,6 +372,7 @@ export default function SubmitReviewScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Online photos from Convex */}
           {photoUrls && photoUrls.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-1">
               {photoUrls.slice(0, 5).map((url, index) => (
@@ -307,10 +390,30 @@ export default function SubmitReviewScreen() {
                   )}
                 </View>
               ))}
-              {(submission.photos?.length || 0) > 5 && (
+              {(submission?.photos?.length || 0) > 5 && (
                 <View className="mx-1 w-20 h-20 rounded-lg bg-zinc-100 items-center justify-center">
                   <Text className="text-zinc-500 font-medium">
-                    +{(submission.photos?.length || 0) - 5}
+                    +{(submission?.photos?.length || 0) - 5}
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          ) : offlineData?.pendingPhotos && offlineData.pendingPhotos.photoUris.length > 0 ? (
+            /* Offline photo thumbnails from local URIs */
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-1">
+              {offlineData.pendingPhotos.photoUris.slice(0, 5).map((uri, index) => (
+                <View key={index} className="mx-1">
+                  <Image
+                    source={{ uri }}
+                    className="w-20 h-20 rounded-lg bg-zinc-100"
+                    resizeMode="cover"
+                  />
+                </View>
+              ))}
+              {offlineData.pendingPhotos.photoUris.length > 5 && (
+                <View className="mx-1 w-20 h-20 rounded-lg bg-zinc-100 items-center justify-center">
+                  <Text className="text-zinc-500 font-medium">
+                    +{offlineData.pendingPhotos.photoUris.length - 5}
                   </Text>
                 </View>
               )}
@@ -438,7 +541,7 @@ export default function SubmitReviewScreen() {
           )}
 
           {/* Transcription Status */}
-          {hasInterview && (
+          {hasInterview && submission && (
             <View className="mt-3 pt-3 border-t border-zinc-100">
               {submission.transcript ? (
                 <View className="flex-row items-center">
@@ -487,7 +590,7 @@ export default function SubmitReviewScreen() {
             <View>
               <Text className="text-xs text-emerald-600 font-medium">Your Payout</Text>
               <Text className="text-2xl font-bold text-emerald-700">
-                ₱{submission.creatorPayout?.toLocaleString() || '500'}
+                ₱{submission?.creatorPayout?.toLocaleString() || (hasVideoInterview ? '500' : hasAudioInterview ? '300' : '500')}
               </Text>
             </View>
             <View className="w-12 h-12 bg-emerald-100 rounded-full items-center justify-center">
@@ -507,10 +610,10 @@ export default function SubmitReviewScreen() {
       <View className="px-4 pt-4 bg-white border-t border-zinc-100" style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
         <TouchableOpacity
           className={`h-14 rounded-xl items-center justify-center flex-row ${
-            loading || !canSubmit ? 'bg-zinc-300' : 'bg-emerald-500'
+            loading || !canSubmit || !isConnected ? 'bg-zinc-300' : 'bg-emerald-500'
           }`}
           onPress={handleSubmit}
-          disabled={loading || !canSubmit}
+          disabled={loading || !canSubmit || !isConnected}
         >
           {loading ? (
             <>
@@ -527,6 +630,13 @@ export default function SubmitReviewScreen() {
         {!canSubmit && (
           <Text className="text-center text-amber-600 text-sm mt-2">
             Please upload at least 3 photos to submit.
+          </Text>
+        )}
+        {!isConnected && canSubmit && (
+          <Text className="text-center text-amber-600 text-sm mt-2">
+            {isOfflinePending
+              ? 'Your data is saved locally. It will upload and submit automatically when you reconnect.'
+              : 'Internet connection required to submit. Please reconnect to continue.'}
           </Text>
         )}
       </View>

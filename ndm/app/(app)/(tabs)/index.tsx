@@ -14,6 +14,8 @@ import { useRouter, Link, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePushNotifications } from '../../../hooks/usePushNotifications';
+import { useNetwork } from '../../../providers/NetworkProvider';
+import { OfflineBanner } from '../../../components/OfflineBanner';
 
 function generateReferralCode(firstName: string, lastName: string): string {
   const namePrefix = ((firstName || 'U').substring(0, 2) + (lastName || 'U').substring(0, 1)).toUpperCase();
@@ -49,8 +51,10 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, isLoaded, isSignedIn } = useUser();
+  const { isConnected } = useNetwork();
   const createCreator = useMutation(api.creators.create);
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
+  const isOffline = isConnected === false;
 
   const creator = useQuery(
     api.creators.getByClerkId,
@@ -94,7 +98,8 @@ export default function HomeScreen() {
     autoCreate();
   }, [isLoaded, isSignedIn, user, creator, isCreatingProfile, createCreator]);
 
-  if (!isLoaded || !isSignedIn || creator === undefined || isCreatingProfile) {
+  // When online, wait for Clerk + Convex to load. When offline, skip — layout already verified auth.
+  if (!isOffline && (!isLoaded || !isSignedIn || creator === undefined || isCreatingProfile)) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#10b981" />
@@ -102,7 +107,7 @@ export default function HomeScreen() {
     );
   }
 
-  if (!creator) {
+  if (!isOffline && !creator) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#10b981" />
@@ -110,8 +115,8 @@ export default function HomeScreen() {
     );
   }
 
-  // New creator who hasn't completed certification training yet
-  if (!(creator as any).certifiedAt) {
+  // New creator who hasn't completed certification training yet (skip check when offline)
+  if (!isOffline && creator && !(creator as any).certifiedAt) {
     return <Redirect href={'/(app)/training' as any} />;
   }
 
@@ -144,6 +149,7 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+      <OfflineBanner />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 16 }}
@@ -167,14 +173,14 @@ export default function HomeScreen() {
                 borderWidth: 2, borderColor: '#e4e4e7',
                 overflow: 'hidden',
               }}>
-                {(creator as any).profileImage ? (
+                {(creator as any)?.profileImage ? (
                   <Image
                     source={{ uri: (creator as any).profileImage }}
                     style={{ width: 44, height: 44, borderRadius: 22 }}
                   />
                 ) : (
                   <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>
-                    {(creator.firstName || 'U').charAt(0).toUpperCase()}
+                    {(creator?.firstName || user?.firstName || 'U').charAt(0).toUpperCase()}
                   </Text>
                 )}
               </View>
@@ -183,7 +189,7 @@ export default function HomeScreen() {
                   WELCOME BACK
                 </Text>
                 <Text style={{ fontSize: 17, fontWeight: '700', color: '#18181b' }}>
-                  {creator.firstName ? `Mabuhay, ${creator.firstName}!` : 'Mabuhay!'}
+                  {(creator?.firstName || user?.firstName) ? `Mabuhay, ${creator?.firstName || user?.firstName}!` : 'Mabuhay!'}
                 </Text>
               </View>
             </View>
@@ -229,7 +235,7 @@ export default function HomeScreen() {
                   AVAILABLE BALANCE
                 </Text>
                 <Text style={{ color: '#fff', fontSize: 32, fontWeight: '800', marginTop: 4, letterSpacing: -0.5 }}>
-                  ₱{(creator.balance ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ₱{(creator?.balance ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </Text>
               </View>
               <View style={{
@@ -376,7 +382,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            {notifications === undefined ? (
+            {!isOffline && notifications === undefined ? (
               <View style={{
                 backgroundColor: '#fff', borderRadius: 20, padding: 24,
                 alignItems: 'center', justifyContent: 'center',

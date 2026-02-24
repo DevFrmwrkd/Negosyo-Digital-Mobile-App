@@ -32,6 +32,10 @@ Run this PowerShell command:
 ```powershell
 $env:NODE_OPTIONS='--max-old-space-size=4096'; Set-Location 'C:\dev\ndm\android'; .\gradlew.bat assembleRelease --no-daemon
 ```
+Run Parallel commands for more efficient use:
+```powershell
+$env:CMAKE_BUILD_PARALLEL_LEVEL='1'; $env:NODE_OPTIONS='--max-old-space-size=8192'; .\gradlew.bat assembleRelease --no-daemon "-Dorg.gradle.workers.max=2"
+```
 
 Or from Command Prompt:
 ```cmd
@@ -68,7 +72,7 @@ newArchEnabled=true
 ### Out of Memory Errors
 - Use `--no-daemon` flag
 - Set `org.gradle.parallel=false` in gradle.properties
-- Build for single architecture: `reactNativeArchitectures=arm64-v8a`
+- Build for single architecture: `reactNativeArchitectures=arm64-v8a`aa
 - Increase Node memory: `NODE_OPTIONS=--max-old-space-size=4096`
 
 ### Java Version Issues

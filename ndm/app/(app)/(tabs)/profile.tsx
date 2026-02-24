@@ -17,6 +17,8 @@ import { api } from '../../../convex/_generated/api';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNetwork } from '../../../providers/NetworkProvider';
+import { OfflineBanner } from '../../../components/OfflineBanner';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
@@ -43,6 +45,9 @@ export default function ProfileScreen() {
   const [signingOut, setSigningOut] = useState(false);
   const [showCertModal, setShowCertModal] = useState(false);
   const certModalRef = useRef<View>(null);
+
+  const { isConnected } = useNetwork();
+  const isOffline = isConnected === false;
 
   const creator = useQuery(
     api.creators.getByClerkId,
@@ -111,7 +116,8 @@ export default function ProfileScreen() {
     );
   };
 
-  if (!isLoaded || creator === undefined) {
+  // When online, wait for data. When offline, skip — layout already verified auth.
+  if (!isOffline && (!isLoaded || creator === undefined)) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#10b981" />
@@ -197,19 +203,19 @@ export default function ProfileScreen() {
         {
           icon: 'help-circle-outline',
           label: 'Help & FAQ',
-          onPress: () => {},
+          onPress: () => router.push('/(app)/help-faq' as any),
           showArrow: true,
         },
         {
           icon: 'document-text-outline',
           label: 'Terms of Service',
-          onPress: () => {},
+          onPress: () => router.push('/(app)/terms-of-service' as any),
           showArrow: true,
         },
         {
           icon: 'lock-closed-outline',
           label: 'Privacy Policy',
-          onPress: () => {},
+          onPress: () => router.push('/(app)/privacy-policy' as any),
           showArrow: true,
         },
       ],
@@ -218,6 +224,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+      <OfflineBanner />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
 
         {/* Header */}

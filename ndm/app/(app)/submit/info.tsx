@@ -17,6 +17,9 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNetwork } from '../../../providers/NetworkProvider';
+import { OfflineBanner } from '../../../components/OfflineBanner';
+import { useFormDraftCache } from '../../../hooks/useFormDraftCache';
 
 const BUSINESS_TYPES = [
   'Barber/Salon',
@@ -47,6 +50,9 @@ export default function SubmitInfoScreen() {
   const createSubmission = useMutation(api.submissions.create);
   const updateSubmission = useMutation(api.submissions.update);
 
+  const { isConnected } = useNetwork();
+  const { saveDraft, loadDraft, clearDraft } = useFormDraftCache();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTypePicker, setShowTypePicker] = useState(false);
@@ -61,9 +67,12 @@ export default function SubmitInfoScreen() {
   const [city, setCity] = useState('');
   const [initialized, setInitialized] = useState(false);
 
-  // Load draft data when available
+  // Load draft data: priority 1 = Convex draft, priority 2 = local cache
   useEffect(() => {
-    if (existingDraft && !initialized) {
+    if (initialized) return;
+
+    // Priority 1: Existing Convex draft
+    if (existingDraft) {
       setBusinessName(existingDraft.businessName || '');
       setBusinessType(existingDraft.businessType || '');
       setOwnerName(existingDraft.ownerName || '');
@@ -71,11 +80,41 @@ export default function SubmitInfoScreen() {
       setOwnerEmail(existingDraft.ownerEmail || '');
       setAddress(existingDraft.address || '');
       setCity(existingDraft.city || '');
-      // Store ID for other steps
       AsyncStorage.setItem('current_submission_id', existingDraft._id);
       setInitialized(true);
+      return;
     }
-  }, [existingDraft, initialized]);
+
+    // Priority 2: Local cache (when query resolved to null — no server draft)
+    if (existingDraft === null) {
+      loadDraft().then((cached) => {
+        if (cached) {
+          setBusinessName(cached.businessName || '');
+          setBusinessType(cached.businessType || '');
+          setOwnerName(cached.ownerName || '');
+          setOwnerPhone(cached.ownerPhone || '');
+          setOwnerEmail(cached.ownerEmail || '');
+          setAddress(cached.address || '');
+          setCity(cached.city || '');
+        }
+        setInitialized(true);
+      });
+    }
+  }, [existingDraft, initialized, loadDraft]);
+
+  // Auto-save form fields to local cache (debounced)
+  useEffect(() => {
+    if (!initialized) return;
+    saveDraft({
+      businessName,
+      businessType,
+      ownerName,
+      ownerPhone,
+      ownerEmail,
+      address,
+      city,
+    });
+  }, [businessName, businessType, ownerName, ownerPhone, ownerEmail, address, city, initialized, saveDraft]);
 
   const handleNext = async () => {
     setError(null);
@@ -90,6 +129,39 @@ export default function SubmitInfoScreen() {
       return;
     }
 
+    const formData = {
+      businessName: businessName.trim(),
+      businessType,
+      ownerName: ownerName.trim(),
+      ownerPhone: ownerPhone.trim(),
+      ownerEmail: ownerEmail.trim() || undefined,
+      address: address.trim(),
+      city: city.trim(),
+    };
+
+    // OFFLINE PATH: Save locally and navigate forward
+    if (!isConnected) {
+      try {
+        await AsyncStorage.setItem('submission_pending_sync', JSON.stringify({
+          formData,
+          creatorId: creator._id,
+          existingDraftId: existingDraft?._id || null,
+          savedAt: Date.now(),
+        }));
+        // Ensure there's a submission ID so downstream screens work
+        const existingId = await AsyncStorage.getItem('current_submission_id');
+        if (!existingId) {
+          await AsyncStorage.setItem('current_submission_id', 'offline_pending');
+        }
+        await clearDraft();
+        router.push('/(app)/submit/photos');
+      } catch (err) {
+        setError('Failed to save data locally');
+      }
+      return;
+    }
+
+    // ONLINE PATH
     setLoading(true);
 
     try {
@@ -98,29 +170,19 @@ export default function SubmitInfoScreen() {
       if (existingDraft) {
         await updateSubmission({
           id: existingDraft._id,
-          businessName: businessName.trim(),
-          businessType,
-          ownerName: ownerName.trim(),
-          ownerPhone: ownerPhone.trim(),
-          ownerEmail: ownerEmail.trim() || undefined,
-          address: address.trim(),
-          city: city.trim(),
+          ...formData,
         });
         submissionId = existingDraft._id;
       } else {
         submissionId = await createSubmission({
           creatorId: creator._id,
-          businessName: businessName.trim(),
-          businessType,
-          ownerName: ownerName.trim(),
-          ownerPhone: ownerPhone.trim(),
-          ownerEmail: ownerEmail.trim() || undefined,
-          address: address.trim(),
-          city: city.trim(),
+          ...formData,
         });
       }
 
       await AsyncStorage.setItem('current_submission_id', submissionId);
+      await clearDraft();
+      await AsyncStorage.removeItem('submission_pending_sync');
       router.push('/(app)/submit/photos');
     } catch (err: any) {
       console.error('Error saving business info:', err);
@@ -130,7 +192,10 @@ export default function SubmitInfoScreen() {
     }
   };
 
-  if (!isLoaded || creator === undefined) {
+  // When offline, skip Clerk/Convex loading gates — layout already verified auth
+  if (!isConnected && (!isLoaded || creator === undefined)) {
+    // Offline: allow form to render without creator data
+  } else if (!isLoaded || creator === undefined) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
         <ActivityIndicator size="large" color="#10b981" />
@@ -150,6 +215,8 @@ export default function SubmitInfoScreen() {
         </TouchableOpacity>
         <Text className="text-sm text-zinc-500 font-medium">STEP 1 OF 4</Text>
       </View>
+
+      <OfflineBanner />
 
       {/* Progress Bar */}
       <View className="px-4 mb-4">
@@ -332,7 +399,9 @@ export default function SubmitInfoScreen() {
             <ActivityIndicator color="white" />
           ) : (
             <>
-              <Text className="text-white font-semibold text-base">Next: Upload Photos</Text>
+              <Text className="text-white font-semibold text-base">
+                {isConnected ? 'Next: Upload Photos' : 'Save & Continue'}
+              </Text>
               <Ionicons name="arrow-forward" size={20} color="white" style={{ marginLeft: 8 }} />
             </>
           )}
