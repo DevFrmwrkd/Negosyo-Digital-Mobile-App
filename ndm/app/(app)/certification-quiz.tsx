@@ -19,6 +19,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CertificateCard from '../../components/CertificateCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -205,9 +206,16 @@ export default function CertificationQuizScreen() {
     setCertifying(true);
     try {
       await certify({ id: creator._id });
+      // Mark certification locally so the dashboard won't redirect back to training
+      // even if the Convex query hasn't propagated the certifiedAt field yet.
+      await AsyncStorage.setItem('ndm_just_certified', 'true');
       router.replace('/(app)/(tabs)/' as any);
-    } catch {
+    } catch (err: any) {
       setCertifying(false);
+      Alert.alert(
+        'Certification Failed',
+        err?.message || 'Something went wrong. Please try again.',
+      );
     }
   };
 

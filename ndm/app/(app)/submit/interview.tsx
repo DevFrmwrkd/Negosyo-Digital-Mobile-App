@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { useUser } from '@clerk/clerk-expo';
-import { useQuery, useMutation } from 'convex/react';
+import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,7 +47,7 @@ export default function SubmitInterviewScreen() {
 
   const { isConnected } = useNetwork();
   const insets = useSafeAreaInsets();
-  const generateR2UploadUrl = useMutation(api.r2.generateUploadUrl);
+  const generateR2UploadUrl = useAction(api.r2.generateUploadUrl);
   const updateSubmission = useMutation(api.submissions.update);
 
   const [submissionId, setSubmissionId] = useState<string | null>(null);
@@ -183,6 +183,7 @@ export default function SubmitInterviewScreen() {
       setRecording(newRecording);
       setIsRecording(true);
       setRecordingDuration(0);
+      setCurrentQuestion(0);
       setError(null);
 
       // Start timer
@@ -711,7 +712,18 @@ export default function SubmitInterviewScreen() {
     }
   };
 
-  if (!isLoaded || creator === undefined || !submissionId) {
+  // When offline, skip Clerk/Convex loading gates — layout already verified auth
+  if (!isConnected && (!isLoaded || creator === undefined)) {
+    // Offline: allow page to render without creator data
+  } else if (!isLoaded || creator === undefined) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#10b981" />
+      </View>
+    );
+  }
+
+  if (!submissionId) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#10b981" />
@@ -1102,11 +1114,11 @@ export default function SubmitInterviewScreen() {
             // Recording in Progress (Audio only) - Centered
             <View className="items-center">
               {/* Recording Indicator */}
-              <View className={`w-24 h-24 ${isPaused ? 'bg-yellow-100' : 'bg-red-100'} rounded-full items-center justify-center mb-4`}>
+              <View className={`w-20 h-20 ${isPaused ? 'bg-yellow-100' : 'bg-red-100'} rounded-full items-center justify-center mb-3`}>
                 {isPaused ? (
-                  <Ionicons name="pause" size={40} color="#eab308" />
+                  <Ionicons name="pause" size={36} color="#eab308" />
                 ) : (
-                  <View style={{ width: 32, height: 32, backgroundColor: '#ef4444', borderRadius: 4 }} />
+                  <View style={{ width: 28, height: 28, backgroundColor: '#ef4444', borderRadius: 4 }} />
                 )}
               </View>
               <Text className="text-2xl font-bold text-zinc-900 mb-1">
@@ -1115,6 +1127,63 @@ export default function SubmitInterviewScreen() {
               <Text className={`mb-4 ${isPaused ? 'text-yellow-600' : 'text-zinc-500'}`}>
                 {isPaused ? 'Paused' : 'Recording...'}
               </Text>
+
+              {/* Question Card */}
+              <View className="w-full bg-zinc-50 rounded-xl p-4 mb-4">
+                <View className="flex-row items-center justify-between mb-2">
+                  <View className="flex-row items-center">
+                    <Ionicons name="chatbubble" size={14} color="#10b981" />
+                    <Text className="text-emerald-600 text-xs font-medium ml-1.5">
+                      ASK THE OWNER
+                    </Text>
+                  </View>
+                  <Text className="text-zinc-400 text-xs font-medium">
+                    {currentQuestion + 1}/{INTERVIEW_QUESTIONS.length}
+                  </Text>
+                </View>
+                <Text className="text-zinc-900 text-base font-medium text-center mb-3">
+                  "{INTERVIEW_QUESTIONS[currentQuestion]}"
+                </Text>
+
+                {/* Question Navigation */}
+                <View className="flex-row justify-center">
+                  <TouchableOpacity
+                    onPress={prevQuestion}
+                    disabled={currentQuestion === 0}
+                    className={`flex-row items-center px-3 py-1.5 rounded-full mr-2 ${
+                      currentQuestion === 0 ? 'bg-zinc-200' : 'bg-zinc-300'
+                    }`}
+                  >
+                    <Ionicons
+                      name="chevron-back"
+                      size={14}
+                      color={currentQuestion === 0 ? '#a1a1aa' : '#3f3f46'}
+                    />
+                    <Text className={`ml-0.5 text-sm font-medium ${currentQuestion === 0 ? 'text-zinc-400' : 'text-zinc-700'}`}>
+                      Prev
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={nextQuestion}
+                    disabled={currentQuestion === INTERVIEW_QUESTIONS.length - 1}
+                    className={`flex-row items-center px-3 py-1.5 rounded-full ${
+                      currentQuestion === INTERVIEW_QUESTIONS.length - 1 ? 'bg-zinc-200' : 'bg-emerald-500'
+                    }`}
+                  >
+                    <Text className={`mr-0.5 text-sm font-medium ${
+                      currentQuestion === INTERVIEW_QUESTIONS.length - 1 ? 'text-zinc-400' : 'text-white'
+                    }`}>
+                      Next
+                    </Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={14}
+                      color={currentQuestion === INTERVIEW_QUESTIONS.length - 1 ? '#a1a1aa' : 'white'}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
 
               {/* Recording Controls */}
               <View className="flex-row items-center justify-center">

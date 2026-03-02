@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { action, query } from "./_generated/server";
 import { v } from "convex/values";
 
 // R2 bucket configuration from environment variables
@@ -138,7 +138,7 @@ const generateFileKey = (folder: string, filename: string): string => {
 };
 
 // Generate presigned URL for uploading
-export const generateUploadUrl = mutation({
+export const generateUploadUrl = action({
   args: {
     folder: v.string(), // "images", "videos", "audio"
     filename: v.string(),
@@ -166,6 +166,21 @@ export const generateUploadUrl = mutation({
       fileKey,
       publicUrl,
     };
+  },
+});
+
+// Get a presigned S3 URL for media streaming (video/audio).
+// Unlike getSignedUrl, this ALWAYS uses the S3 endpoint with auth params,
+// because the r2.dev public URLs don't support HTTP range requests
+// required by media players.
+export const getStreamableUrl = query({
+  args: { fileKey: v.string() },
+  handler: async (ctx, args) => {
+    if (!args.fileKey) return null;
+    if (args.fileKey.startsWith("http")) return args.fileKey;
+
+    const config = getR2Config();
+    return await generatePresignedUrl("GET", args.fileKey, null, config, 3600);
   },
 });
 

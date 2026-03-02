@@ -57,6 +57,16 @@ function InitialLayout() {
   const networkKnown = isConnected !== null;
   const effectivelyLoaded = networkKnown && (isLoaded || (isConnected === false && cachedAuth === true));
 
+  // Hide the native splash screen once we're ready.
+  // useEffect is necessary because effectivelyLoaded may transition to true
+  // after the initial onLayout has already fired (e.g. waiting for NetInfo +
+  // AsyncStorage when offline).
+  useEffect(() => {
+    if (effectivelyLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [effectivelyLoaded]);
+
   const onLayoutRootView = useCallback(async () => {
     if (effectivelyLoaded) {
       await SplashScreen.hideAsync();

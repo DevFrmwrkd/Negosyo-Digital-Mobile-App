@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useMutation } from 'convex/react';
+import { useMutation, useAction } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { useNetwork } from '../providers/NetworkProvider';
 import { Id } from '../convex/_generated/dataModel';
@@ -9,6 +9,7 @@ import { Id } from '../convex/_generated/dataModel';
 const PENDING_SYNC_KEY = 'submission_pending_sync';
 const PENDING_PHOTOS_KEY = 'submission_pending_photos';
 const PENDING_INTERVIEW_KEY = 'submission_pending_interview';
+const PENDING_SUBMIT_KEY = 'submission_pending_submit';
 const DRAFT_FORM_KEY = 'submission_draft_form';
 
 interface PendingSyncData {
@@ -73,7 +74,8 @@ export function useOfflineSync() {
 
   const createSubmission = useMutation(api.submissions.create);
   const updateSubmission = useMutation(api.submissions.update);
-  const generateR2UploadUrl = useMutation(api.r2.generateUploadUrl);
+  const submitSubmission = useMutation(api.submissions.submit);
+  const generateR2UploadUrl = useAction(api.r2.generateUploadUrl);
 
   const attemptSync = useCallback(async () => {
     if (isSyncing.current) return;
@@ -82,8 +84,9 @@ export function useOfflineSync() {
     const hasPendingSync = await AsyncStorage.getItem(PENDING_SYNC_KEY);
     const hasPendingPhotos = await AsyncStorage.getItem(PENDING_PHOTOS_KEY);
     const hasPendingInterview = await AsyncStorage.getItem(PENDING_INTERVIEW_KEY);
+    const hasPendingSubmit = await AsyncStorage.getItem(PENDING_SUBMIT_KEY);
 
-    if (!hasPendingSync && !hasPendingPhotos && !hasPendingInterview) {
+    if (!hasPendingSync && !hasPendingPhotos && !hasPendingInterview && !hasPendingSubmit) {
       isSyncing.current = false;
       return;
     }
@@ -240,6 +243,19 @@ export function useOfflineSync() {
         await AsyncStorage.removeItem(PENDING_INTERVIEW_KEY);
       }
 
+      // ── Step 4: Submit the submission if queued offline ──
+      if (hasPendingSubmit && realSubmissionId) {
+        try {
+          await submitSubmission({ id: realSubmissionId as Id<'submissions'> });
+          await AsyncStorage.removeItem(PENDING_SUBMIT_KEY);
+          await AsyncStorage.removeItem('current_submission_id');
+          syncedParts.push('submission');
+        } catch (err) {
+          console.error('[OfflineSync] Failed to submit submission:', err);
+          // Leave pending submit for next retry
+        }
+      }
+
       // ── Done ──
       if (syncedParts.length > 0) {
         Alert.alert(
@@ -254,7 +270,7 @@ export function useOfflineSync() {
     } finally {
       isSyncing.current = false;
     }
-  }, [createSubmission, updateSubmission, generateR2UploadUrl]);
+  }, [createSubmission, updateSubmission, submitSubmission, generateR2UploadUrl]);
 
   useEffect(() => {
     if (!isConnected) {

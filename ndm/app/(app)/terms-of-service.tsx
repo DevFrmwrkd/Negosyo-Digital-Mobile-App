@@ -69,7 +69,7 @@ const TERMS_SECTIONS: TermsSection[] = [
     iconColor: '#10b981',
     iconBg: '#d1fae5',
     content:
-      'Creators earn payouts for approved submissions:\n\n• Video interview submissions: ₱500 per approved submission.\n• Audio-only interview submissions: ₱300 per approved submission.\n• Referral bonuses: ₱100 when a referred creator\'s first submission is approved.\n\nPayout amounts are subject to change with notice. Earnings are credited to your in-app wallet upon approval. Payouts are processed according to the current payout schedule and available methods.\n\nWe reserve the right to withhold payment for submissions found to be fraudulent, duplicated, or in violation of these Terms.',
+      'Creators earn payouts for approved submissions:\n\n• Video interview submissions: ₱500 per approved submission.\n• Audio-only interview submissions: ₱300 per approved submission.\n• Referral bonuses: ₱1000 when a referred creator\'s first submission is paid.\n\nPayout amounts are subject to change with notice. Earnings are credited to your in-app wallet upon approval. Payouts are processed according to the current payout schedule and available methods.\n\nWe reserve the right to withhold payment for submissions found to be fraudulent, duplicated, or in violation of these Terms.',
   },
   {
     id: 6,
@@ -78,7 +78,7 @@ const TERMS_SECTIONS: TermsSection[] = [
     iconColor: '#f59e0b',
     iconBg: '#fef3c7',
     content:
-      'Each creator receives a unique referral code upon registration. You may share this code with others to invite them to join the platform.\n\nReferral program rules:\n• You earn a bonus when a referred creator\'s first submission is approved.\n• Self-referrals or creating multiple accounts to earn referral bonuses is prohibited.\n• Misuse of the referral program may result in forfeiture of bonuses and account suspension.\n• We reserve the right to modify or discontinue the referral program at any time.',
+      'Each creator receives a unique referral code upon registration. You may share this code with others to invite them to join the platform.\n\nReferral program rules:\n• You earn a bonus when a referred creator\'s first submission is mark as paid.\n• Self-referrals or creating multiple accounts to earn referral bonuses is prohibited.\n• Misuse of the referral program may result in forfeiture of bonuses and account suspension.\n• We reserve the right to modify or discontinue the referral program at any time.',
   },
   {
     id: 7,
@@ -132,7 +132,7 @@ const TERMS_SECTIONS: TermsSection[] = [
     iconColor: '#10b981',
     iconBg: '#d1fae5',
     content:
-      'If you have any questions about these Terms of Service, please contact us:\n\n• Email: support@negosyodigital.com\n• In-App: Profile > Help & FAQ\n\nWe aim to respond to all inquiries within 2-3 business days.',
+      'If you have any questions about these Terms of Service, please contact us:\n\n• Email: frmwrkd.media@gmail.com\n• In-App: Profile > Help & FAQ\n\nWe aim to respond to all inquiries within 2-3 business days.',
   },
 ];
 

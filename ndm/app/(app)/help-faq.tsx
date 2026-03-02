@@ -52,15 +52,15 @@ const FAQ_SECTIONS: FAQSection[] = [
         iconColor: '#10b981',
         iconBg: '#d1fae5',
       },
-      {
-        id: 3,
-        question: 'Do I need internet to use the app?',
-        answer:
-          'You can fill in business information, take photos, and record interviews while offline. Your data is saved locally on your device. Once you reconnect to the internet, the app will automatically sync your pending submissions to the server. However, you need internet to create a new account or log in for the first time.',
-        icon: 'cloud-offline-outline',
-        iconColor: '#f59e0b',
-        iconBg: '#fef3c7',
-      },
+      // {
+      //   id: 3,
+      //   question: 'Do I need internet to use the app?',
+      //   answer:
+      //     'You can fill in business information, take photos, and record interviews while offline. Your data is saved locally on your device. Once you reconnect to the internet, the app will automatically sync your pending submissions to the server. However, you need internet to create a new account or log in for the first time.',
+      //   icon: 'cloud-offline-outline',
+      //   iconColor: '#f59e0b',
+      //   iconBg: '#fef3c7',
+      // },
     ],
   },
   {
@@ -120,7 +120,7 @@ const FAQ_SECTIONS: FAQSection[] = [
         id: 9,
         question: 'How do referral bonuses work?',
         answer:
-          'You earn ₱100 when a creator you referred gets their first submission approved. Share your unique referral code (found on your Profile page) with friends. When they sign up using your code and get their first approved submission, the bonus is automatically credited to your balance.',
+          'You earn ₱1000 when a creator you referred gets their first submission was paid by the business owner. Share your unique referral code (found on your Profile page) with friends. When they sign up using your code and get their first submission paid, the bonus is automatically credited to your balance.',
         icon: 'people-outline',
         iconColor: '#8b5cf6',
         iconBg: '#ede9fe',
@@ -129,7 +129,7 @@ const FAQ_SECTIONS: FAQSection[] = [
         id: 10,
         question: 'When and how do I get paid?',
         answer:
-          'Your earnings are credited to your in-app wallet balance once a submission is approved. You can request a payout through the Wallet section. Payouts are processed according to the current payout schedule. Check the Wallet page for available payout methods and minimum payout thresholds.',
+          'Your earnings are credited to your in-app wallet balance once a submission is mark as paid. You can request a payout through the Wallet section. Payouts are processed according to the current payout schedule. Check the Wallet page for available payout methods and minimum payout thresholds.',
         icon: 'wallet-outline',
         iconColor: '#f59e0b',
         iconBg: '#fef3c7',
