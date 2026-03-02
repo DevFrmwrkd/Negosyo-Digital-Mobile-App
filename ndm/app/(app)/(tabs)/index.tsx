@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { useRouter, Link, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePushNotifications } from '../../../hooks/usePushNotifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNetwork } from '../../../providers/NetworkProvider';
 import { OfflineBanner } from '../../../components/OfflineBanner';
 
@@ -54,7 +55,23 @@ export default function HomeScreen() {
   const { isConnected } = useNetwork();
   const createCreator = useMutation(api.creators.create);
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
+  const [justCertified, setJustCertified] = useState(false);
+  const certCheckDone = useRef(false);
   const isOffline = isConnected === false;
+
+  // Check if the user just completed certification (race-condition guard).
+  // The quiz sets this flag BEFORE navigating here so we don't redirect back
+  // to training while the Convex query subscription is still propagating.
+  useEffect(() => {
+    if (certCheckDone.current) return;
+    certCheckDone.current = true;
+    AsyncStorage.getItem('ndm_just_certified').then((val) => {
+      if (val === 'true') {
+        setJustCertified(true);
+        AsyncStorage.removeItem('ndm_just_certified');
+      }
+    });
+  }, []);
 
   const creator = useQuery(
     api.creators.getByClerkId,
@@ -115,8 +132,9 @@ export default function HomeScreen() {
     );
   }
 
-  // New creator who hasn't completed certification training yet (skip check when offline)
-  if (!isOffline && creator && !(creator as any).certifiedAt) {
+  // New creator who hasn't completed certification training yet (skip check when offline).
+  // Also skip if justCertified flag is set — the Convex query may not have propagated yet.
+  if (!isOffline && !justCertified && creator && !(creator as any).certifiedAt) {
     return <Redirect href={'/(app)/training' as any} />;
   }
 
@@ -250,13 +268,13 @@ export default function HomeScreen() {
               <View style={{ flex: 1, backgroundColor: '#27272a', borderRadius: 12, padding: 10 }}>
                 <Text style={{ color: '#71717a', fontSize: 10, fontWeight: '500' }}>TOTAL EARNED</Text>
                 <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700', marginTop: 2 }}>
-                  ₱{((creator as any).totalEarnings ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  ₱{((creator as any)?.totalEarnings ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                 </Text>
               </View>
               <View style={{ flex: 1, backgroundColor: '#27272a', borderRadius: 12, padding: 10 }}>
                 <Text style={{ color: '#71717a', fontSize: 10, fontWeight: '500' }}>WITHDRAWN</Text>
                 <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700', marginTop: 2 }}>
-                  ₱{((creator as any).totalWithdrawn ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  ₱{((creator as any)?.totalWithdrawn ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                 </Text>
               </View>
             </View>

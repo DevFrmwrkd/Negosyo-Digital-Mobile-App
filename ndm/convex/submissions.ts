@@ -64,7 +64,16 @@ export const getByIdWithCreator = query({
     if (!submission) return null;
 
     const creator = await ctx.db.get(submission.creatorId);
-    return { ...submission, creator };
+
+    // Fetch generated website to get deployed URL
+    const generatedWebsite = await ctx.db
+      .query("generatedWebsites")
+      .withIndex("by_submission_id", (q) => q.eq("submissionId", args.id))
+      .first();
+
+    const deployedUrl = generatedWebsite?.deployedUrl || generatedWebsite?.publishedUrl || null;
+
+    return { ...submission, creator, deployedUrl };
   },
 });
 

@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { useUser } from '@clerk/clerk-expo';
-import { useQuery, useMutation } from 'convex/react';
+import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,7 +32,7 @@ export default function SubmitPhotosScreen() {
 
   const { isConnected } = useNetwork();
   const insets = useSafeAreaInsets();
-  const generateR2UploadUrl = useMutation(api.r2.generateUploadUrl);
+  const generateR2UploadUrl = useAction(api.r2.generateUploadUrl);
   const updateSubmission = useMutation(api.submissions.update);
 
   const [submissionId, setSubmissionId] = useState<string | null>(null);
@@ -259,7 +259,18 @@ export default function SubmitPhotosScreen() {
     }
   };
 
-  if (!isLoaded || creator === undefined || !submissionId) {
+  // When offline, skip Clerk/Convex loading gates — layout already verified auth
+  if (!isConnected && (!isLoaded || creator === undefined)) {
+    // Offline: allow page to render without creator data
+  } else if (!isLoaded || creator === undefined) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator size="large" color="#10b981" />
+      </View>
+    );
+  }
+
+  if (!submissionId) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
         <ActivityIndicator size="large" color="#10b981" />

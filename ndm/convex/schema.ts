@@ -22,6 +22,7 @@ export default defineSchema({
     status: v.optional(v.string()),
     profileImage: v.optional(v.string()), // R2 public URL for profile photo
     certifiedAt: v.optional(v.number()), // Timestamp when creator passed certification training
+    level: v.optional(v.number()), // Creator level
   }).index("by_clerk_id", ["clerkId"])
     .index("by_email", ["email"])
     .index("by_referral_code", ["referralCode"])
@@ -60,6 +61,7 @@ export default defineSchema({
     reviewedAt: v.optional(v.number()), // When the review happened
     websiteUrl: v.optional(v.string()),
     creatorPayout: v.optional(v.number()),
+    creatorPaidAt: v.optional(v.number()),
     platformFee: v.optional(v.number()), // Platform fee charged to business owner
     amount: v.optional(v.number()),
     airtableRecordId: v.optional(v.string()), // Airtable record ID (starts with "rec")

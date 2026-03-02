@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { useUser } from '@clerk/clerk-expo';
-import { useMutation, useQuery } from 'convex/react';
+import { useMutation, useQuery, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,7 +24,7 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const { user, isLoaded } = useUser();
   const updateCreator = useMutation(api.creators.update);
-  const generateR2UploadUrl = useMutation(api.r2.generateUploadUrl);
+  const generateR2UploadUrl = useAction(api.r2.generateUploadUrl);
 
   const creator = useQuery(
     api.creators.getByClerkId,

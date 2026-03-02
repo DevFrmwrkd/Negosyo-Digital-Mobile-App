@@ -175,7 +175,42 @@ export default function SubmitReviewScreen() {
     );
   };
 
-  if (!isLoaded || creator === undefined || !submissionId || (!isOfflinePending && submission === undefined)) {
+  const handleQueueSubmit = async () => {
+    if (!canSubmit) return;
+
+    Alert.alert(
+      'Queue Submission',
+      'Your data is saved locally. It will automatically upload and submit when you reconnect to the internet.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Save & Queue',
+          onPress: async () => {
+            try {
+              await AsyncStorage.setItem('submission_pending_submit', 'true');
+              router.replace('/(app)/submit/success?queued=true');
+            } catch (err: any) {
+              console.error('Error queuing submission:', err);
+              setError(err.message || 'Failed to queue submission');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // When offline, skip Clerk/Convex loading gates — layout already verified auth
+  if (!isConnected && (!isLoaded || creator === undefined)) {
+    // Offline: allow page to render without creator data
+  } else if (!isLoaded || creator === undefined) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator size="large" color="#10b981" />
+      </View>
+    );
+  }
+
+  if (!submissionId || (!isOfflinePending && submission === undefined)) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
         <ActivityIndicator size="large" color="#10b981" />
@@ -610,15 +645,24 @@ export default function SubmitReviewScreen() {
       <View className="px-4 pt-4 bg-white border-t border-zinc-100" style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
         <TouchableOpacity
           className={`h-14 rounded-xl items-center justify-center flex-row ${
-            loading || !canSubmit || !isConnected ? 'bg-zinc-300' : 'bg-emerald-500'
+            loading || !canSubmit
+              ? 'bg-zinc-300'
+              : !isConnected
+                ? 'bg-amber-500'
+                : 'bg-emerald-500'
           }`}
-          onPress={handleSubmit}
-          disabled={loading || !canSubmit || !isConnected}
+          onPress={!isConnected ? handleQueueSubmit : handleSubmit}
+          disabled={loading || !canSubmit}
         >
           {loading ? (
             <>
               <ActivityIndicator color="white" />
               <Text className="text-white font-semibold text-base ml-2">Submitting...</Text>
+            </>
+          ) : !isConnected && canSubmit ? (
+            <>
+              <Ionicons name="cloud-upload-outline" size={20} color="white" />
+              <Text className="text-white font-semibold text-base ml-2">Save & Submit When Online</Text>
             </>
           ) : (
             <>
@@ -634,9 +678,7 @@ export default function SubmitReviewScreen() {
         )}
         {!isConnected && canSubmit && (
           <Text className="text-center text-amber-600 text-sm mt-2">
-            {isOfflinePending
-              ? 'Your data is saved locally. It will upload and submit automatically when you reconnect.'
-              : 'Internet connection required to submit. Please reconnect to continue.'}
+            Your draft will be saved and automatically submitted when you reconnect.
           </Text>
         )}
       </View>

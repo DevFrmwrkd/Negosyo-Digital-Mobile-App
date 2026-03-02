@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   BackHandler,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from 'convex/react';
@@ -16,20 +16,23 @@ import { Id } from '../../../convex/_generated/dataModel';
 
 export default function SubmitSuccessScreen() {
   const router = useRouter();
+  const { queued } = useLocalSearchParams<{ queued?: string }>();
+  const isQueued = queued === 'true';
   const [submissionId, setSubmissionId] = useState<string | null>(null);
 
-  // Load submission ID before clearing it
+  // Load submission ID — only clear it if NOT queued (offline sync still needs it)
   useEffect(() => {
-    const loadAndClearSubmissionId = async () => {
+    const loadSubmissionId = async () => {
       const id = await AsyncStorage.getItem('current_submission_id');
       if (id) {
         setSubmissionId(id);
-        // Clear it after storing in state
-        await AsyncStorage.removeItem('current_submission_id');
+        if (!isQueued) {
+          await AsyncStorage.removeItem('current_submission_id');
+        }
       }
     };
-    loadAndClearSubmissionId();
-  }, []);
+    loadSubmissionId();
+  }, [isQueued]);
 
   // Intercept back button to go to dashboard instead of back through submit flow
   useFocusEffect(
@@ -47,10 +50,11 @@ export default function SubmitSuccessScreen() {
     }, [router])
   );
 
-  // Query the submission to check transcription status
+  // Query the submission to check transcription status (skip for queued/offline_pending)
+  const canQuery = submissionId && submissionId !== 'offline_pending' && !isQueued;
   const submission = useQuery(
     api.submissions.getById,
-    submissionId ? { id: submissionId as Id<'submissions'> } : 'skip'
+    canQuery ? { id: submissionId as Id<'submissions'> } : 'skip'
   );
 
   const hasInterview = submission?.videoStorageId || submission?.audioStorageId;
@@ -58,6 +62,54 @@ export default function SubmitSuccessScreen() {
   const transcriptionFailed = submission?.transcriptionStatus === 'failed' || submission?.transcriptionStatus === 'skipped';
   const isProcessing = hasInterview && !hasTranscription && !transcriptionFailed;
 
+  // ── Queued (offline) success state ──
+  if (isQueued) {
+    return (
+      <SafeAreaView className="flex-1 bg-white">
+        <View className="flex-1 items-center justify-center px-6">
+          {/* Queued Icon */}
+          <View className="w-24 h-24 bg-amber-100 rounded-full items-center justify-center mb-6">
+            <Ionicons name="cloud-upload-outline" size={56} color="#f59e0b" />
+          </View>
+
+          {/* Title */}
+          <Text className="text-2xl font-bold text-zinc-900 text-center mb-2">
+            Submission Saved!
+          </Text>
+
+          {/* Description */}
+          <Text className="text-zinc-500 text-center mb-8 px-4">
+            Your data is saved locally on your device. It will automatically upload and submit for review once you reconnect to the internet.
+          </Text>
+
+          {/* Info Card */}
+          <View className="bg-amber-50 border border-amber-200 rounded-xl p-4 w-full mb-8">
+            <View className="flex-row items-start">
+              <Ionicons name="information-circle" size={20} color="#d97706" style={{ marginTop: 1 }} />
+              <View className="ml-3 flex-1">
+                <Text className="text-amber-800 font-medium text-sm mb-1">What happens when you're back online?</Text>
+                <Text className="text-amber-700 text-xs mb-1">1. Your business info, photos, and interview will upload automatically.</Text>
+                <Text className="text-amber-700 text-xs mb-1">2. Your submission will be sent for review.</Text>
+                <Text className="text-amber-700 text-xs">3. You'll receive a notification confirming the sync.</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Button */}
+          <View className="w-full">
+            <TouchableOpacity
+              className="h-14 bg-amber-500 rounded-xl items-center justify-center"
+              onPress={() => router.replace('/(app)/dashboard')}
+            >
+              <Text className="text-white font-semibold text-base">Back to Dashboard</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Normal (online) success state ──
   return (
     <SafeAreaView className="flex-1 bg-white">
       <View className="flex-1 items-center justify-center px-6">
