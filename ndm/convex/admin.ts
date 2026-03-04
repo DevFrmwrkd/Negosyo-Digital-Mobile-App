@@ -197,17 +197,23 @@ export const markDeployed = mutation({
 
 export const markPaid = mutation({
   args: {
-    id: v.id("submissions"),
+    id: v.optional(v.id("submissions")),
+    submissionId: v.optional(v.id("submissions")),
     adminId: v.string(),
   },
   handler: async (ctx, args) => {
-    const submission = await ctx.db.get(args.id);
+    const submissionId = args.id ?? args.submissionId;
+    if (!submissionId) {
+      throw new Error("Either 'id' or 'submissionId' must be provided");
+    }
+
+    const submission = await ctx.db.get(submissionId);
     if (!submission) {
       throw new Error("Submission not found");
     }
 
     // Update submission status
-    await ctx.db.patch(args.id, {
+    await ctx.db.patch(submissionId, {
       status: "paid",
     });
 
@@ -224,7 +230,7 @@ export const markPaid = mutation({
       // Create earning record
       await ctx.scheduler.runAfter(0, internal.earnings.create, {
         creatorId: submission.creatorId,
-        submissionId: args.id,
+        submissionId: submissionId,
         amount: submission.creatorPayout,
         type: "submission_approved",
       });
@@ -235,7 +241,7 @@ export const markPaid = mutation({
       adminId: args.adminId,
       action: "payment_sent",
       targetType: "submission",
-      targetId: args.id,
+      targetId: submissionId,
       metadata: {
         businessName: submission.businessName,
         amount: submission.creatorPayout,
@@ -271,7 +277,7 @@ export const markPaid = mutation({
       body: submission.creatorPayout
         ? `You earned ₱${submission.creatorPayout.toLocaleString()} for "${submission.businessName}".`
         : `Payment processed for "${submission.businessName}".`,
-      data: { submissionId: args.id, amount: submission.creatorPayout },
+      data: { submissionId, amount: submission.creatorPayout },
     });
 
     // Trigger referral bonus on first paid submission only
@@ -284,7 +290,7 @@ export const markPaid = mutation({
       .first();
 
     // Only fire if this is the creator's first paid submission
-    if (!previousPaid || previousPaid._id === args.id) {
+    if (!previousPaid || previousPaid._id === submissionId) {
       const referral = await ctx.db
         .query("referrals")
         .withIndex("by_referred", (q) => q.eq("referredId", submission.creatorId))
@@ -293,7 +299,7 @@ export const markPaid = mutation({
       if (referral && referral.status === "pending") {
         await ctx.scheduler.runAfter(0, internal.referrals.qualifyByCreator, {
           referredCreatorId: submission.creatorId,
-          submissionId: args.id,
+          submissionId,
           bonusAmount: 1000, // ₱1,000 one-time referral bonus
         });
       }

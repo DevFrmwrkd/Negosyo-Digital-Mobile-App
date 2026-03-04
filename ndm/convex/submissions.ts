@@ -429,6 +429,22 @@ export const getAll = query({
   },
 });
 
+export const getAllWithCreator = query({
+  args: {},
+  handler: async (ctx) => {
+    const submissions = await ctx.db.query("submissions").order("desc").collect();
+
+    const submissionsWithCreators = await Promise.all(
+      submissions.map(async (submission) => {
+        const creator = await ctx.db.get(submission.creatorId);
+        return { ...submission, creator };
+      })
+    );
+
+    return submissionsWithCreators;
+  },
+});
+
 export const getByStatus = query({
   args: { status: v.string() },
   handler: async (ctx, args) => {

@@ -29,6 +29,7 @@ import type * as settings from "../settings.js";
 import type * as storage from "../storage.js";
 import type * as submissions from "../submissions.js";
 import type * as websiteContent from "../websiteContent.js";
+import type * as wise from "../wise.js";
 import type * as withdrawals from "../withdrawals.js";
 
 import type {
@@ -59,6 +60,7 @@ declare const fullApi: ApiFromModules<{
   storage: typeof storage;
   submissions: typeof submissions;
   websiteContent: typeof websiteContent;
+  wise: typeof wise;
   withdrawals: typeof withdrawals;
 }>;
 
