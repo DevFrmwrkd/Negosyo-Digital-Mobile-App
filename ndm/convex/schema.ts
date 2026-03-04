@@ -66,6 +66,7 @@ export default defineSchema({
     amount: v.optional(v.number()),
     airtableRecordId: v.optional(v.string()), // Airtable record ID (starts with "rec")
     airtableSyncStatus: v.optional(v.string()), // pending_push, pushed, content_received, synced, error
+    sentEmailAt: v.optional(v.number()), // When the business owner email was sent
   }).index("by_creator_id", ["creatorId"])
     .index("by_status", ["status"])
     .index("by_airtable_sync", ["airtableSyncStatus"])
@@ -263,20 +264,29 @@ export default defineSchema({
   withdrawals: defineTable({
     creatorId: v.id("creators"),
     amount: v.number(),
-    payoutMethod: v.union(v.literal("gcash"), v.literal("maya"), v.literal("bank_transfer")),
-    accountDetails: v.string(),
+    payoutMethod: v.literal("bank_transfer"),
+    accountDetails: v.string(),           // Legacy display string
+    accountHolderName: v.optional(v.string()),
+    bankName: v.optional(v.string()),      // Human-readable bank name e.g. "BDO"
+    bankCode: v.optional(v.string()),      // BSP routing code for Wise API
+    accountNumber: v.optional(v.string()),
     status: v.union(v.literal("pending"), v.literal("processing"), v.literal("completed"), v.literal("failed")),
     processedAt: v.optional(v.number()),
-    transactionRef: v.optional(v.string()),
+    transactionRef: v.optional(v.string()),  // Wise transfer ID (set after initiation)
+    wiseTransferId: v.optional(v.string()),
+    wiseRecipientId: v.optional(v.string()),
+    failureReason: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_creator", ["creatorId"])
     .index("by_status", ["status"]),
 
   payoutMethods: defineTable({
     creatorId: v.id("creators"),
-    type: v.union(v.literal("gcash"), v.literal("maya"), v.literal("bank_transfer")),
+    type: v.literal("bank_transfer"),
     accountName: v.string(),
     accountNumber: v.string(),
+    bankName: v.optional(v.string()),
+    bankCode: v.optional(v.string()),
     isDefault: v.boolean(),
   }).index("by_creator", ["creatorId"]),
 

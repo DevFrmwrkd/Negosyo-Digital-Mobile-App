@@ -111,4 +111,91 @@ http.route({
   }),
 });
 
+/**
+ * Wise Webhook Endpoint
+ *
+ * Receives transfer state change events from Wise and updates
+ * the corresponding withdrawal record in the database.
+ *
+ * URL: https://diligent-ibex-454.convex.site/wise-webhook
+ *
+ * Wise State → Withdrawal Status mapping:
+ *   outgoing_payment_sent → completed
+ *   cancelled             → failed
+ *   funds_refunded        → failed
+ *   bounced_back          → failed
+ *   processing            → processing
+ */
+http.route({
+  path: "/wise-webhook",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const body = await request.json();
+
+      console.log("[Wise Webhook] Received:", JSON.stringify(body));
+
+      const eventType = body.event_type;
+
+      // Only handle transfer state changes
+      if (eventType !== "transfers#state-change") {
+        return new Response(JSON.stringify({ received: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const transferId = String(body.data?.resource?.id);
+      const currentState: string = body.data?.current_state;
+
+      if (!transferId || !currentState) {
+        console.error("[Wise Webhook] Missing transferId or currentState");
+        return new Response(JSON.stringify({ error: "Invalid payload" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Map Wise transfer states to withdrawal statuses
+      const stateMap: Record<string, "processing" | "completed" | "failed"> = {
+        processing: "processing",
+        outgoing_payment_sent: "completed",
+        cancelled: "failed",
+        funds_refunded: "failed",
+        bounced_back: "failed",
+        charged_back: "failed",
+      };
+
+      const withdrawalStatus = stateMap[currentState];
+
+      if (!withdrawalStatus) {
+        // Unrecognised state — acknowledge and ignore
+        console.log(`[Wise Webhook] Unhandled state: ${currentState}`);
+        return new Response(JSON.stringify({ received: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      await ctx.runMutation(internal.withdrawals.updateByTransactionRef, {
+        transactionRef: transferId,
+        status: withdrawalStatus,
+      });
+
+      console.log(`[Wise Webhook] Updated transfer ${transferId} → ${withdrawalStatus}`);
+
+      return new Response(JSON.stringify({ received: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("[Wise Webhook] Error:", error);
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 export default http;

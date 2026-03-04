@@ -8,7 +8,11 @@
       "Bash(cd:*)",
       "Bash(wc:*)",
       "Bash(npx convex dev --once)",
-      "Bash(npx convex env get R2_PUBLIC_URL)"
+      "Bash(npx convex env get R2_PUBLIC_URL)",
+      "Bash(npm test -- --no-coverage)",
+      "WebFetch(domain:docs.wise.com)",
+      "WebFetch(domain:api.sandbox.transferwise.tech)",
+      "mcp__claude_ai_Figma__whoami"
     ]
   }
 }
