@@ -6,6 +6,7 @@ import { useAuth, useClerk } from '@clerk/clerk-expo';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, ActivityIndicator, Text } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NetworkProvider } from './NetworkProvider';
 
 let NetInfoModule: any = null;
@@ -119,14 +120,16 @@ function ClerkLoadedWithFallback({ children }: { children: React.ReactNode }) {
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
-      <ClerkLoadedWithFallback>
-        <ConvexClerkProviderInner>
-          <NetworkProvider>
-            {children}
-          </NetworkProvider>
-        </ConvexClerkProviderInner>
-      </ClerkLoadedWithFallback>
-    </ClerkProvider>
+    <SafeAreaProvider>
+      <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
+        <ClerkLoadedWithFallback>
+          <ConvexClerkProviderInner>
+            <NetworkProvider>
+              {children}
+            </NetworkProvider>
+          </ConvexClerkProviderInner>
+        </ClerkLoadedWithFallback>
+      </ClerkProvider>
+    </SafeAreaProvider>
   );
 }

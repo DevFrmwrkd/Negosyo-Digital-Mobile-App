@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   ActivityIndicator,
   Image,
@@ -14,6 +13,7 @@ import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Id } from '../../../convex/_generated/dataModel';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio, Video, ResizeMode } from 'expo-av';
